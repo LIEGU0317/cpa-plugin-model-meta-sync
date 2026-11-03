@@ -5,7 +5,7 @@
 > `max-context-length` / `input-modalities` / `output-modalities` / `thinking.levels`。
 
 - 插件 ID：`model-meta-sync`
-- 版本：0.2.2（ABI 1 / schema 8，CPA v8）
+- 版本：0.3.0（ABI 1 / schema 8，CPA v8）
 - 产物：`model-meta-sync-v0.2.0.so`（linux/amd64 生产；linux/arm64 沙箱）
 - 源码：本目录 `plugin/`
 - 0.2.0 变更：取消供应商白名单（默认同步配置内全部启用的 provider）；供应商只按名称命中；
@@ -105,6 +105,15 @@
 - 0.1.4（15:19）：按独立验收 v3 修掉 `--restore` 在无 python3 时静默成功（兜底 status ≠ 0/1 → 拒绝），
   报告新增 `warnings[]`（锚点守卫命中时显式告警，避免「同步静默失效」）；启动同步 0 变更。
 - 证据：`evidence/production-deploy.json`、`evidence/integration-suite-*.txt`；运维步骤见 `runbook/deploy.md`。
+
+## 5.5 0.3.0 变更
+
+- 模型列表发现与 CPA／CPAMC 的「从端点拉取」对齐：先试 `<base>/v1/models`，仅 404/405 时回退
+  `<base>/models`（CPAMC 的 `buildModelsEndpoint` 规则），支持讯飞星火这类根路径为 `/v2` 的网关。
+- 新增 `models_paths`（provider 名称 → 路径）覆盖特殊目录；报告新增 `models_path` 字段（只有路径，无主机）。
+- 与「从端点拉取」的绑定方式：面板应用模型会写 `config.yaml` → CPA 热重载 → 插件重新注册并执行启动同步，
+  新模型的 metadata 在同一次操作内补齐（沙箱实测：运行中的 CPA 新增模型后一个重载周期内被补全）。
+- 非 404/405 的上游错误不做路径重试，避免对真实故障重复请求。
 
 ## 5.4 0.2.2 上线记录
 

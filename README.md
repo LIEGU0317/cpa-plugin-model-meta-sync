@@ -12,7 +12,7 @@ be typed by hand.
 - Matching: provider entries are selected **by provider name**. Models are matched **by model name**
   (exact -> case -> bare name -> separator-free spelling -> catalog suffixes), so a gateway's naming
   style does not have to be declared anywhere.
-- Current release: **0.2.2**.
+- Current release: **0.3.0**.
 
 ## Why a plugin
 
@@ -97,6 +97,8 @@ different endpoint from `gpt-4o`.
                fields: [display-name, max-context-length, input-modalities, output-modalities, thinking]
                # providers: [Gateway A]                    # optional filter; omit to sync every provider
                # include_disabled: false
+               # models_paths:                            # only for non-standard catalogs
+               #     Spark: /models                       #   e.g. base-url .../v2 -> .../v2/models
                timeout_seconds: 20
                backup_keep: 10
                sync_on_start: true
@@ -109,6 +111,28 @@ different endpoint from `gpt-4o`.
 flag when present, otherwise `config.yaml` in the process working directory - the same fallback CPA
 itself uses. It needs the path only because it writes the file directly (the host ABI exposes no
 config read/write), which is also why other plugins never ask for it.
+
+### Non-standard catalogs
+
+Model discovery mirrors CPA's own "fetch from endpoint": the plugin tries `/v1/models` and then
+`/models` on the provider's `base-url`, retrying the second only on 404/405. That covers gateways
+rooted below `/v1` (讯飞星火 serves `/v2/models`). A provider whose catalog lives somewhere else gets
+an explicit entry:
+
+```yaml
+models_paths:
+    Spark: /models
+    Some Gateway: /custom/catalog
+```
+
+Paths are appended to `base-url` the same way (`/v1` duplication is avoided).
+
+### Binding to "fetch from endpoint"
+
+Applying models in the CPAMC provider editor writes `config.yaml`, CPA hot-reloads it and
+re-registers the plugin, which runs its startup sync. With `sync_on_start: true` (the default) the
+newly applied models therefore get their metadata in the same operation — no second click. Verified
+in the sandbox: a model added to a running CPA was enriched within one reload cycle.
 
 Details and rollback: [`runbook/deploy.md`](runbook/deploy.md).
 

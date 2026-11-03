@@ -262,8 +262,18 @@ func modelsURL(baseURL, modelsPath string) (string, error) {
 	return base + path, nil
 }
 
-func fetchUpstream(ctx context.Context, cfg Config, baseURL, apiKey string) ([]upstreamModel, error) {
-	target, err := modelsURL(baseURL, cfg.UpstreamModelsPath)
+// upstreamStatusError keeps the HTTP status so the caller can fall back to the
+// next discovery path only when the path itself is wrong (404/405).
+type upstreamStatusError struct {
+	Code int
+	Err  error
+}
+
+func (e *upstreamStatusError) Error() string { return e.Err.Error() }
+func (e *upstreamStatusError) Unwrap() error { return e.Err }
+
+func fetchUpstream(ctx context.Context, cfg Config, baseURL, apiKey, modelsPath string) ([]upstreamModel, error) {
+	target, err := modelsURL(baseURL, modelsPath)
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +301,10 @@ func fetchUpstream(ctx context.Context, cfg Config, baseURL, apiKey string) ([]u
 			return nil, fmt.Errorf("read %s: %w", redactURL(next), errRead)
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return nil, fmt.Errorf("GET %s: HTTP %d: %s", redactURL(next), resp.StatusCode, snippet(body))
+			return nil, &upstreamStatusError{
+				Code: resp.StatusCode,
+				Err:  fmt.Errorf("GET %s: HTTP %d: %s", redactURL(next), resp.StatusCode, snippet(body)),
+			}
 		}
 		var list upstreamList
 		if errUnmarshal := json.Unmarshal(body, &list); errUnmarshal != nil {
@@ -603,6 +616,7 @@ type ModelChange struct {
 
 type ProviderReport struct {
 	Name        string        `json:"name"`
+	Endpoint    string        `json:"models_path,omitempty"`
 	Upstream    int           `json:"upstream_models"`
 	Configured  int           `json:"configured_models"`
 	Matched     int           `json:"matched"`
@@ -724,7 +738,20 @@ func (p *pluginState) runSync(ctx context.Context, opts syncOptions) (*RunReport
 			apiKey = providerKey(prov.node)
 		}
 		baseURL := scalarValue(mapLookup(prov.node, "base-url"))
-		upstream, errFetch := fetchUpstream(ctx, cfg, baseURL, apiKey)
+		var upstream []upstreamModel
+		var errFetch error
+		for _, modelsPath := range cfg.modelsPathCandidates(prov.name) {
+			upstream, errFetch = fetchUpstream(ctx, cfg, baseURL, apiKey, modelsPath)
+			if errFetch == nil {
+				prep.Endpoint = modelsPath
+				break
+			}
+			var statusErr *upstreamStatusError
+			if errors.As(errFetch, &statusErr) && (statusErr.Code == http.StatusNotFound || statusErr.Code == http.StatusMethodNotAllowed) {
+				continue
+			}
+			break
+		}
 		if errFetch != nil {
 			prep.UpstreamErr = errFetch.Error()
 			upstreamFailures = append(upstreamFailures, prov.name)

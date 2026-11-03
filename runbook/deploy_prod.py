@@ -17,7 +17,7 @@ import yaml
 CPA_DIR = os.environ.get("CPA_DIR", "/srv/cliproxyapi")
 CONFIG = os.path.join(CPA_DIR, "config.yaml")
 PLUGIN_ID = "model-meta-sync"
-PLUGIN_VERSION = "0.2.2"
+PLUGIN_VERSION = "0.3.0"
 PLUGIN_DST = os.path.join(CPA_DIR, "plugins", "linux", "amd64", f"{PLUGIN_ID}-v{PLUGIN_VERSION}.so")
 SERVICE = "cliproxyapi.service"
 STAMP = time.strftime("%Y%m%d-%H%M%S")

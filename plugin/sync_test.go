@@ -245,7 +245,7 @@ func TestFetchPagination(t *testing.T) {
 		_, _ = w.Write([]byte(`{"object":"list","has_more":false,"data":[{"id":"auto/b","display_name":"B"}]}`))
 	}))
 	defer server.Close()
-	models, err := fetchUpstream(context.Background(), Config{TimeoutSeconds: 5, UpstreamModelsPath: "/v1/models"}, server.URL, "sk-test")
+	models, err := fetchUpstream(context.Background(), Config{TimeoutSeconds: 5, UpstreamModelsPath: "/v1/models"}, server.URL, "sk-test", "/v1/models")
 	if err != nil {
 		t.Fatal(err)
 	}

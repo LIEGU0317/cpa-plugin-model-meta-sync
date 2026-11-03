@@ -51,6 +51,10 @@ type Config struct {
 	APIKey string `yaml:"api_key"`
 	// UpstreamModelsPath overrides the model-list path appended to the provider base URL.
 	UpstreamModelsPath string `yaml:"upstream_models_path"`
+	// ModelsPaths maps a provider name to its model-list path. Non-standard
+	// gateways (for example one rooted at /v2 that only serves /models) need it;
+	// everything else uses the automatic /v1/models -> /models fallback.
+	ModelsPaths map[string]string `yaml:"models_paths"`
 }
 
 func parseConfig(raw []byte) (Config, error) {
@@ -183,6 +187,31 @@ func (c Config) wantsProvider(name string) bool {
 		}
 	}
 	return false
+}
+
+// modelsPathCandidates returns the model-list paths to try, in order. The
+// second entry mirrors CPA's own "fetch from endpoint" discovery, which appends
+// /models to the base URL: gateways such as 讯飞星火 serve /v2/models and 404 on
+// /v2/v1/models.
+func (c Config) modelsPathCandidates(provider string) []string {
+	for name, path := range c.ModelsPaths {
+		if strings.EqualFold(strings.TrimSpace(name), strings.TrimSpace(provider)) {
+			if trimmed := strings.TrimSpace(path); trimmed != "" {
+				return []string{trimmed}
+			}
+		}
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, 3)
+	for _, candidate := range []string{c.UpstreamModelsPath, defaultUpstreamDir, "/models"} {
+		trimmed := strings.TrimSpace(candidate)
+		if trimmed == "" || seen[trimmed] {
+			continue
+		}
+		seen[trimmed] = true
+		out = append(out, trimmed)
+	}
+	return out
 }
 
 func (c Config) timeout() time.Duration {

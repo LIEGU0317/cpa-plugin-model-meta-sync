@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- Endpoint discovery now mirrors CPA's "fetch from endpoint": try `/v1/models`, then `/models`,
+  falling back only on 404/405. Gateways rooted below `/v1` (讯飞星火 `/v2/models`) are supported.
+- `models_paths` maps a provider name to a custom catalog path for anything unusual.
+- Reports carry the path that worked (`models_path`), never the host.
+- Applying models in the CPAMC editor triggers a config reload and therefore the plugin's startup
+  sync, so metadata lands in the same operation (`sync_on_start: true`).
+
 ## 0.2.2
 
 - Recognise `supports_reasoning` / `only_reasoning` as reasoning support (workbuddy2api and other
