@@ -12,7 +12,7 @@ be typed by hand.
 - Matching: provider entries are selected **by provider name**. Models are matched **by model name**
   (exact -> case -> bare name -> separator-free spelling -> catalog suffixes), so a gateway's naming
   style does not have to be declared anywhere.
-- Current release: **0.2.1**.
+- Current release: **0.2.2**.
 
 ## Why a plugin
 
@@ -30,7 +30,7 @@ file watcher hot-reload the config. Models are never added or removed.
 | `context_length` (`context_window`, `max_input_tokens` fallbacks) | `max-context-length` | fill if `0`; overwrite only when opted in. `max_output_tokens` is an **output** limit, not context |
 | `modalities.input` | `input-modalities` | skipped when the upstream omits it (never guessed) |
 | `modalities.output` | `output-modalities` | same |
-| `reasoning_levels` / `supported_reasoning_levels[].effort` | `thinking.levels` | only when `reasoning: true`; fill-if-empty by default |
+| `reasoning_levels` / `supported_reasoning_levels[].effort` / `reasoning_supported_efforts` | `thinking.levels` | requires `reasoning` / `supports_reasoning` / `only_reasoning`; level names are filtered to CPA's vocabulary |
 
 Gateways such as workbuddy2api publish the human label as `name` and only `modalities.input`; that is
 handled, and a label identical to the id is ignored. A single `reasoning_effort` value is **not**

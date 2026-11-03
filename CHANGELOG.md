@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.2
+
+- Recognise `supports_reasoning` / `only_reasoning` as reasoning support (workbuddy2api and other
+  relays do not send `reasoning`).
+- Read the ladder from `reasoning_supported_efforts`, in addition to `reasoning_levels` and
+  `supported_reasoning_levels[].effort`.
+- Reasoning-only models that publish a single `reasoning_effort` get that one level.
+- Filter and lower-case level names to CPA's schema (`none`, `minimal`, `low`, `medium`, `high`,
+  `xhigh`, `max`); unknown names are never written.
+
 ## 0.2.1
 
 - `config_path` is optional. The plugin resolves the host's config from `-config`/`--config` in the

@@ -166,3 +166,59 @@ func TestResolveConfigPath(t *testing.T) {
 		t.Fatalf("cwd fallback: %q %v", got, err)
 	}
 }
+
+func TestParseReasoningFlagsAndLadders(t *testing.T) {
+	cases := []struct {
+		name      string
+		payload   string
+		reasoning bool
+		levels    []string
+	}{
+		{
+			name:      "workbuddy supported_reasoning_levels",
+			payload:   `{"id":"glm","supports_reasoning":true,"supported_reasoning_levels":[{"effort":"low"},{"effort":"high"},{"effort":"max"}]}`,
+			reasoning: true,
+			levels:    []string{"low", "high", "max"},
+		},
+		{
+			name:      "reasoning_supported_efforts",
+			payload:   `{"id":"kimi","only_reasoning":true,"reasoning_supported_efforts":["low","medium","high","xhigh","max"]}`,
+			reasoning: true,
+			levels:    []string{"low", "medium", "high", "xhigh", "max"},
+		},
+		{
+			name:      "single effort on a reasoning-only model",
+			payload:   `{"id":"auto","only_reasoning":true,"reasoning_effort":"high"}`,
+			reasoning: true,
+			levels:    []string{"high"},
+		},
+		{
+			name:      "support without a ladder stays empty",
+			payload:   `{"id":"mimo","supports_reasoning":true}`,
+			reasoning: true,
+			levels:    nil,
+		},
+		{
+			name:      "unknown levels are dropped and case folded",
+			payload:   `{"id":"x","support_reasoning":true,"reasoning_levels":["HIGH","turbo","low"]}`,
+			reasoning: false,
+			levels:    []string{"high", "low"},
+		},
+	}
+	for _, tc := range cases {
+		got := parseUpstreamModel([]byte(tc.payload))
+		if got.Reasoning != tc.reasoning {
+			t.Errorf("%s: reasoning=%v want %v", tc.name, got.Reasoning, tc.reasoning)
+		}
+		if len(got.Levels) != len(tc.levels) {
+			t.Errorf("%s: levels=%v want %v", tc.name, got.Levels, tc.levels)
+			continue
+		}
+		for i := range tc.levels {
+			if got.Levels[i] != tc.levels[i] {
+				t.Errorf("%s: levels=%v want %v", tc.name, got.Levels, tc.levels)
+				break
+			}
+		}
+	}
+}

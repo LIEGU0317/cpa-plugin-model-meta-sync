@@ -112,28 +112,79 @@ func parseUpstreamModel(raw json.RawMessage) upstreamModel {
 			m.hasModalities = len(m.Input) > 0 || len(m.Output) > 0
 		}
 	}
-	if v, ok := obj["reasoning"]; ok {
-		var flag bool
-		if json.Unmarshal(v, &flag) == nil {
-			m.Reasoning = flag
-		}
-	}
-	m.Levels = cleanStrings(jsonStrings(obj["reasoning_levels"]))
-	if len(m.Levels) == 0 {
+	m.Reasoning = jsonBool(obj["reasoning"]) || jsonBool(obj["supports_reasoning"]) || jsonBool(obj["only_reasoning"])
+	m.Levels = upstreamLevels(obj)
+	return m
+}
+
+// cpaThinkingLevels are the level names CPA understands. Anything else an
+// upstream advertises is dropped instead of being written into config.yaml:
+// the config has to stay within CPA's schema, not mirror the upstream dialect.
+var cpaThinkingLevels = []string{"none", "minimal", "low", "medium", "high", "xhigh", "max"}
+
+// upstreamLevels reads the reasoning ladder from the shapes gateways use:
+// reasoning_levels (strings), supported_reasoning_levels ([{effort}]) and
+// reasoning_supported_efforts (strings). A reasoning-only model that publishes
+// just a single reasoning_effort gets that one level, which is exactly what it
+// accepts. Unknown level names are filtered out.
+func upstreamLevels(obj map[string]json.RawMessage) []string {
+	var levels []string
+	levels = append(levels, jsonStrings(obj["reasoning_levels"])...)
+	if len(levels) == 0 {
 		var entries []struct {
 			Effort string `json:"effort"`
 		}
 		if rawLevels, ok := obj["supported_reasoning_levels"]; ok {
 			if json.Unmarshal(rawLevels, &entries) == nil {
 				for _, entry := range entries {
-					if v := strings.TrimSpace(entry.Effort); v != "" {
-						m.Levels = append(m.Levels, v)
-					}
+					levels = append(levels, entry.Effort)
 				}
 			}
 		}
 	}
-	return m
+	if len(levels) == 0 {
+		levels = append(levels, jsonStrings(obj["reasoning_supported_efforts"])...)
+	}
+	levels = filterThinkingLevels(levels)
+	if len(levels) == 0 && jsonBool(obj["only_reasoning"]) {
+		levels = filterThinkingLevels([]string{jsonString(obj["reasoning_effort"])})
+	}
+	return levels
+}
+
+func filterThinkingLevels(in []string) []string {
+	out := make([]string, 0, len(in))
+	seen := map[string]bool{}
+	for _, item := range cleanStrings(in) {
+		// Normalise case: CPA compares level names lower-case.
+		level := strings.ToLower(item)
+		if !isCPAThinkingLevel(level) || seen[level] {
+			continue
+		}
+		seen[level] = true
+		out = append(out, level)
+	}
+	return out
+}
+
+func isCPAThinkingLevel(level string) bool {
+	for _, allowed := range cpaThinkingLevels {
+		if level == allowed {
+			return true
+		}
+	}
+	return false
+}
+
+func jsonBool(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	var flag bool
+	if json.Unmarshal(raw, &flag) == nil {
+		return flag
+	}
+	return false
 }
 
 func jsonString(raw json.RawMessage) string {

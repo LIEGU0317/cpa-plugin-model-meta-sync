@@ -15,7 +15,7 @@ import (
 
 const (
 	pluginName    = "model-meta-sync"
-	pluginVersion = "0.2.1"
+	pluginVersion = "0.2.2"
 	pluginAuthor  = "LIEGU0317"
 	pluginRepo    = "https://github.com/LIEGU0317/cpa-plugin-model-meta-sync"
 	routePrefix   = "/model-meta-sync"
