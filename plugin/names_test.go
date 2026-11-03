@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func model(id, display string) upstreamModel {
 	return upstreamModel{ID: id, DisplayName: display}
@@ -123,5 +127,42 @@ func TestParseConfigExplicitOverwriteFields(t *testing.T) {
 	}
 	if !cfg.overwrites("display-name") || cfg.overwrites("thinking") {
 		t.Fatalf("unexpected overwrite set: %v", cfg.OverwriteFields)
+	}
+}
+
+func TestConfigPathFromArgs(t *testing.T) {
+	cases := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"-config", "/etc/cpa/config.yaml"}, "/etc/cpa/config.yaml"},
+		{[]string{"-config=/etc/cpa/config.yaml"}, "/etc/cpa/config.yaml"},
+		{[]string{"--config", "cpa.yaml"}, "cpa.yaml"},
+		{[]string{"--config=cpa.yaml"}, "cpa.yaml"},
+		{[]string{"-port", "8317"}, ""},
+		{[]string{"-config"}, ""},
+	}
+	for _, tc := range cases {
+		if got := configPathFromArgs(tc.args); got != tc.want {
+			t.Errorf("configPathFromArgs(%v)=%q want %q", tc.args, got, tc.want)
+		}
+	}
+}
+
+func TestResolveConfigPath(t *testing.T) {
+	if got, err := resolveConfigPath(" /explicit/config.yaml "); err != nil || got != "/explicit/config.yaml" {
+		t.Fatalf("explicit path: %q %v", got, err)
+	}
+	dir := t.TempDir()
+	t.Chdir(dir)
+	if _, err := resolveConfigPath(""); err == nil {
+		t.Fatal("missing config.yaml must be an error, not a silent guess")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("config-version: 8\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := resolveConfigPath("")
+	if err != nil || got != filepath.Join(dir, "config.yaml") {
+		t.Fatalf("cwd fallback: %q %v", got, err)
 	}
 }

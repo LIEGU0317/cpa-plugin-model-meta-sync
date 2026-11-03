@@ -3,7 +3,8 @@
 生产：`<cpa-host>`（CPA v8，`<cpa-dir>`，systemd **user** 单元 `cliproxyapi.service`）
 沙箱/预发：本地 arm64 `.sandbox/`、`<build-host>` amd64 `/tmp/mms-stage/`
 
-`deploy_prod.py` / `rollback_prod.sh` 的默认路径是 `/srv/cliproxyapi`；实际目录不同时用环境变量覆盖：
+插件自己找配置：未写 `config_path` 时按宿主的 `-config/--config`，否则进程工作目录下的 `config.yaml`。
+`deploy_prod.py` / `rollback_prod.sh` 面向配置文件的默认路径是 `/srv/cliproxyapi`；实际目录不同时用环境变量覆盖：
 
 ```bash
 export CPA_DIR=/your/cpa/dir          # deploy_prod.py
@@ -16,7 +17,7 @@ export CPA_CONFIG=/your/cpa/config.yaml   # rollback_prod.sh
 |---|---|
 | 插件 | `plugins/linux/amd64/model-meta-sync-v0.2.0.so`（旧版本由 host 清理） |
 | 作用范围 | 配置内**全部启用的** openai-compatibility provider（不再有 `providers` 白名单；该键仅作可选过滤） |
-| 配置块 | `plugins.configs.model-meta-sync`（mode=missing，未设 `overwrite_fields`，sync_on_start=true，dry_run_on_start=false） |
+| 配置块 | `plugins.configs.model-meta-sync`（mode=missing，未设 `config_path`/`overwrite_fields`，sync_on_start=true，dry_run_on_start=false） |
 | 首轮铺开 | 先 `MMS_DRY_RUN_ON_START=true` 部署，仅报告：7 家取到列表、1 家（`/v2` 根路径）404 被隔离；确认后改 false 应用，写入 12 处空字段，Magpie 已填值零改动 |
 | 幂等 | 应用后再次启动同步 `changed_fields=0`、未写盘 |
 | 备份 | deploy：`config.yaml.bak-modelmetasync-deploy-<ts>`；插件写前：`config.yaml.bak-modelmetasync-<ts>`（deploy 备份不会被 prune） |

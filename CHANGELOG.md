@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- `config_path` is optional. The plugin resolves the host's config from `-config`/`--config` in the
+  process arguments, otherwise `config.yaml` in the process working directory (CPA's own fallback).
+  Explicit `config_path` still wins; nothing is guessed when no file is found.
+
 ## 0.2.0
 
 - **Provider-agnostic scope**: sync every enabled `openai-compatibility` provider by default. The

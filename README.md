@@ -12,7 +12,7 @@ be typed by hand.
 - Matching: provider entries are selected **by provider name**. Models are matched **by model name**
   (exact -> case -> bare name -> separator-free spelling -> catalog suffixes), so a gateway's naming
   style does not have to be declared anywhere.
-- Current release: **0.2.0**.
+- Current release: **0.2.1**.
 
 ## Why a plugin
 
@@ -92,7 +92,7 @@ different endpoint from `gpt-4o`.
        configs:
            model-meta-sync:
                enabled: true
-               config_path: /srv/cliproxyapi/config.yaml   # config that owns the provider entries
+               # config_path: /path/to/config.yaml          # optional; omitted = host -config / ./config.yaml
                mode: missing                               # missing | always
                fields: [display-name, max-context-length, input-modalities, output-modalities, thinking]
                # providers: [Gateway A]                    # optional filter; omit to sync every provider
@@ -104,6 +104,11 @@ different endpoint from `gpt-4o`.
                interval_minutes: 0                         # >0 repeats the sync on a timer
                # api_key: sk-...                           # optional; defaults to the provider's first key
    ```
+
+`config_path` is optional. The plugin resolves the CPA config from the host process: its `-config`
+flag when present, otherwise `config.yaml` in the process working directory - the same fallback CPA
+itself uses. It needs the path only because it writes the file directly (the host ABI exposes no
+config read/write), which is also why other plugins never ask for it.
 
 Details and rollback: [`runbook/deploy.md`](runbook/deploy.md).
 

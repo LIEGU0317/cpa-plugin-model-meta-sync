@@ -5,7 +5,7 @@
 > `max-context-length` / `input-modalities` / `output-modalities` / `thinking.levels`。
 
 - 插件 ID：`model-meta-sync`
-- 版本：0.2.0（ABI 1 / schema 8，CPA v8）
+- 版本：0.2.1（ABI 1 / schema 8，CPA v8）
 - 产物：`model-meta-sync-v0.2.0.so`（linux/amd64 生产；linux/arm64 沙箱）
 - 源码：本目录 `plugin/`
 - 0.2.0 变更：取消供应商白名单（默认同步配置内全部启用的 provider）；供应商只按名称命中；
@@ -105,6 +105,14 @@
 - 0.1.4（15:19）：按独立验收 v3 修掉 `--restore` 在无 python3 时静默成功（兜底 status ≠ 0/1 → 拒绝），
   报告新增 `warnings[]`（锚点守卫命中时显式告警，避免「同步静默失效」）；启动同步 0 变更。
 - 证据：`evidence/production-deploy.json`、`evidence/integration-suite-*.txt`；运维步骤见 `runbook/deploy.md`。
+
+## 5.3 0.2.1 上线记录
+
+- `config_path` 改为可选：未配置时从宿主进程取 `-config/--config`，否则用工作目录下的
+  `config.yaml`（与 CPA 自身的回退一致）；显式配置仍然优先，两者都没有则报错而不是猜路径。
+- 生产已删除配置块里的 `config_path`，重启后 `plugin loaded version=0.2.1`，启动同步
+  `changed_fields=0`、未写盘，8 家供应商照常命中。
+- 沙箱（无 `config_path`、工作目录启动）27/27 PASS。
 
 ## 5.2 0.2.0 上线记录
 

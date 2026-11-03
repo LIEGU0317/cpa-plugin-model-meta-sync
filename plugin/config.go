@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -9,7 +11,6 @@ import (
 )
 
 const (
-	defaultConfigPath  = "/srv/cliproxyapi/config.yaml"
 	defaultTimeoutSec  = 20
 	defaultBackupKeep  = 10
 	defaultUpstreamDir = "/v1/models"
@@ -59,9 +60,7 @@ func parseConfig(raw []byte) (Config, error) {
 			return Config{}, fmt.Errorf("parse plugin config: %w", err)
 		}
 	}
-	if strings.TrimSpace(cfg.ConfigPath) == "" {
-		cfg.ConfigPath = defaultConfigPath
-	}
+	cfg.ConfigPath = strings.TrimSpace(cfg.ConfigPath)
 	cfg.Mode = strings.ToLower(strings.TrimSpace(cfg.Mode))
 	switch cfg.Mode {
 	case "", "missing":
@@ -131,9 +130,7 @@ func normalizeFields(fields []string) []string {
 // withDefaults fills in values that parseConfig would have supplied so a
 // programmatically constructed Config (tests, future callers) stays valid.
 func (c Config) withDefaults() Config {
-	if strings.TrimSpace(c.ConfigPath) == "" {
-		c.ConfigPath = defaultConfigPath
-	}
+	c.ConfigPath = strings.TrimSpace(c.ConfigPath)
 	if strings.TrimSpace(c.Mode) == "" {
 		c.Mode = "missing"
 	}
@@ -190,4 +187,51 @@ func (c Config) wantsProvider(name string) bool {
 
 func (c Config) timeout() time.Duration {
 	return time.Duration(c.TimeoutSeconds) * time.Second
+}
+
+// resolveConfigPath finds the CPA config that owns the provider entries.
+//
+// config_path is optional. When it is absent the path is taken from the host
+// process itself: the -config flag it was started with, otherwise config.yaml
+// in its working directory - exactly the fallback CPA uses. The host ABI does
+// not expose config read/write, which is why the plugin has to locate the file
+// rather than ask for it.
+func resolveConfigPath(configured string) (string, error) {
+	configured = strings.TrimSpace(configured)
+	if configured != "" {
+		return configured, nil
+	}
+	wd, errGetwd := os.Getwd()
+	if errGetwd != nil {
+		return "", fmt.Errorf("cannot resolve config path: %w", errGetwd)
+	}
+	if fromFlag := configPathFromArgs(os.Args[1:]); fromFlag != "" {
+		if !filepath.IsAbs(fromFlag) {
+			fromFlag = filepath.Join(wd, fromFlag)
+		}
+		return fromFlag, nil
+	}
+	candidate := filepath.Join(wd, "config.yaml")
+	if _, errStat := os.Stat(candidate); errStat == nil {
+		return candidate, nil
+	}
+	return "", fmt.Errorf("cannot locate CPA config.yaml in %s: set config_path", wd)
+}
+
+// configPathFromArgs extracts -config/--config from the host command line.
+func configPathFromArgs(args []string) string {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		name, value, hasValue := strings.Cut(arg, "=")
+		if name != "-config" && name != "--config" {
+			continue
+		}
+		if hasValue {
+			return strings.TrimSpace(value)
+		}
+		if i+1 < len(args) {
+			return strings.TrimSpace(args[i+1])
+		}
+	}
+	return ""
 }

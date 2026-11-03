@@ -29,7 +29,7 @@ plugins:
     configs:
         model-meta-sync:
             enabled: true
-            config_path: /srv/cliproxyapi/config.yaml   # config that owns the provider entries
+            # config_path: /path/to/config.yaml  # optional: -config flag or ./config.yaml
             mode: missing            # missing | always
             fields: [display-name, max-context-length, input-modalities, output-modalities, thinking]
             # providers: [Gateway A] # optional name filter; omit = every enabled provider

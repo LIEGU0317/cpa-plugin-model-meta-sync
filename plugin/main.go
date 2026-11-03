@@ -15,7 +15,7 @@ import (
 
 const (
 	pluginName    = "model-meta-sync"
-	pluginVersion = "0.2.0"
+	pluginVersion = "0.2.1"
 	pluginAuthor  = "LIEGU0317"
 	pluginRepo    = "https://github.com/LIEGU0317/cpa-plugin-model-meta-sync"
 	routePrefix   = "/model-meta-sync"
@@ -60,7 +60,7 @@ func (p *pluginState) metadata() pluginapi.Metadata {
 		Author:           pluginAuthor,
 		GitHubRepository: pluginRepo,
 		ConfigFields: []pluginapi.ConfigField{
-			{Name: "config_path", Type: pluginapi.ConfigFieldTypeString, Description: "Absolute path to the CPA config.yaml that owns provider model entries."},
+			{Name: "config_path", Type: pluginapi.ConfigFieldTypeString, Description: "Optional path to the CPA config.yaml; omitted = the host's -config flag or ./config.yaml."},
 			{Name: "providers", Type: pluginapi.ConfigFieldTypeArray, Description: "Optional provider-name filter; empty syncs every enabled provider."},
 			{Name: "include_disabled", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Also sync providers marked disabled in the CPA config."},
 			{Name: "mode", Type: pluginapi.ConfigFieldTypeEnum, EnumValues: []string{"missing", "always"}, Description: "missing fills empty fields only; always recomputes configured fields."},

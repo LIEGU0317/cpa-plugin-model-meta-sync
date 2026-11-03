@@ -1,5 +1,5 @@
 PLUGIN_NAME ?= model-meta-sync
-VERSION ?= 0.2.0
+VERSION ?= 0.2.1
 BUILD_DIR ?= build
 GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)

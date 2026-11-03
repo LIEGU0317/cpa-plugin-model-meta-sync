@@ -17,7 +17,7 @@ import yaml
 CPA_DIR = os.environ.get("CPA_DIR", "/srv/cliproxyapi")
 CONFIG = os.path.join(CPA_DIR, "config.yaml")
 PLUGIN_ID = "model-meta-sync"
-PLUGIN_VERSION = "0.2.0"
+PLUGIN_VERSION = "0.2.1"
 PLUGIN_DST = os.path.join(CPA_DIR, "plugins", "linux", "amd64", f"{PLUGIN_ID}-v{PLUGIN_VERSION}.so")
 SERVICE = "cliproxyapi.service"
 STAMP = time.strftime("%Y%m%d-%H%M%S")
@@ -25,7 +25,6 @@ BLOCK_INDENT = 8
 
 PLUGIN_BLOCK = """        model-meta-sync:
             enabled: true
-            config_path: /srv/cliproxyapi/config.yaml
             mode: missing
             fields:
                 - display-name
@@ -157,7 +156,7 @@ def main():
         "provider_count_after": len(after_cfg["api-keys"]["openai-compatibility"]),
     }
     print(json.dumps(summary, indent=2))
-    with open(f"/srv/cliproxyapi/model-meta-sync-deploy-{STAMP}.json", "w") as handle:
+    with open(os.path.join(CPA_DIR, f"model-meta-sync-deploy-{STAMP}.json"), "w") as handle:
         json.dump(summary, handle, indent=2)
 
 

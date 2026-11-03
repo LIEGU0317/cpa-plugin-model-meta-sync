@@ -605,6 +605,17 @@ func (p *pluginState) runSync(ctx context.Context, opts syncOptions) (*RunReport
 		cfg.Providers = []string{opts.Provider}
 	}
 	cfg = cfg.withDefaults()
+	resolvedPath, errResolve := resolveConfigPath(cfg.ConfigPath)
+	if errResolve != nil {
+		return &RunReport{
+			DryRun:    opts.DryRun,
+			StartedAt: started.Format(time.RFC3339),
+			Mode:      cfg.Mode,
+			Fields:    append([]string(nil), cfg.Fields...),
+			Error:     errResolve.Error(),
+		}, errResolve
+	}
+	cfg.ConfigPath = resolvedPath
 	report := &RunReport{
 		DryRun:     opts.DryRun,
 		StartedAt:  started.Format(time.RFC3339),
