@@ -1,0 +1,91 @@
+=== RUN   TestAudit_UpstreamFailuresNoWrite
+    audit_fixture_test.go:60: [OK] 401 unauthorised         err=true written=false shaUnchanged=true
+    audit_fixture_test.go:60: [OK] html non-json            err=true written=false shaUnchanged=true
+    audit_fixture_test.go:60: [OK] empty body               err=true written=false shaUnchanged=true
+    audit_fixture_test.go:60: [OK] json array not object    err=true written=false shaUnchanged=true
+    audit_fixture_test.go:60: [OK] truncated json           err=true written=false shaUnchanged=true
+--- PASS: TestAudit_UpstreamFailuresNoWrite (0.02s)
+=== RUN   TestAudit_UpstreamDuplicateAndMissingID
+    audit_fixture_test.go:78: duplicate/missing id: err=<nil> written=true
+    audit_fixture_test.go:79: resulting model entries:
+        api-keys:
+            openai-compatibility:
+                - name: "Magpie"
+                  base-url: "http://127.0.0.1:33589"
+                  models:
+                    - display-name: FIRST
+                      max-context-length: 100
+                      name: "alpha"
+    audit_fixture_test.go:83: OK: duplicate id took the first entry
+    audit_fixture_test.go:88: OK: id-less upstream entries ignored
+--- PASS: TestAudit_UpstreamDuplicateAndMissingID (0.01s)
+=== RUN   TestAudit_NonTargetProviderUntouched
+    audit_fixture_test.go:102: non-target: err=<nil> written=true
+    audit_fixture_test.go:111: OK: non-target provider block byte-identical
+--- PASS: TestAudit_NonTargetProviderUntouched (0.01s)
+=== RUN   TestAudit_OverwriteFieldsRespectsThinking
+    audit_fixture_test.go:130: overwrite_fields: err=<nil> written=true out=
+        api-keys:
+            openai-compatibility:
+                - name: "Magpie"
+                  base-url: "http://127.0.0.1:36533"
+                  models:
+                    - input-modalities:
+                        - text
+                        - image
+                      name: "alpha"
+                      display-name: UP-NAME
+                      max-context-length: 262144
+                      output-modalities:
+                        - text
+                      thinking:
+                        levels: ["low", "medium", "high"]
+    audit_fixture_test.go:132: OK: thinking.levels preserved (not overwritten)
+    audit_fixture_test.go:137: OK: display-name overwritten per overwrite_fields
+--- PASS: TestAudit_OverwriteFieldsRespectsThinking (0.01s)
+=== RUN   TestAudit_TOCTOU_ConflictDetection
+    audit_fixture_test.go:157: OK: conflict detected: config changed while syncing; retry
+    audit_fixture_test.go:162: OK: concurrent human edit preserved
+--- PASS: TestAudit_TOCTOU_ConflictDetection (0.00s)
+=== RUN   TestAudit_AnomalyTypes
+    audit_fixture_test.go:192: [OK] max-context-length: abc      err=false written=true shaChanged=true stillValidYAML=true
+    audit_fixture_test.go:192: [OK] max-context-length: {} map   err=false written=true shaChanged=true stillValidYAML=true
+    audit_fixture_test.go:192: [OK] thinking: scalar string      err=false written=true shaChanged=true stillValidYAML=true
+    audit_fixture_test.go:192: [OK] thinking: list               err=false written=true shaChanged=true stillValidYAML=true
+    audit_fixture_test.go:192: [OK] modalities: scalar           err=false written=true shaChanged=true stillValidYAML=true
+    audit_fixture_test.go:192: [CHECK] duplicate key in model       err=true written=false shaChanged=false stillValidYAML=false
+--- PASS: TestAudit_AnomalyTypes (0.04s)
+=== RUN   TestAudit_PathAllowed_0_1_1
+    audit_review_test.go:123: [OK] api-keys.openai-compatibility.0.models.3.display-name    want=true  got=true  (legit)
+    audit_review_test.go:123: [OK] api-keys.openai-compatibility.0.models.3.thinking.levels.0 want=true  got=true  (legit thinking)
+    audit_review_test.go:123: [OK] api-keys.openai-compatibility.0.models.3.name            want=false got=false (name locked)
+    audit_review_test.go:123: [OK] api-keys.openai-compatibility.0.models.x.display-name    want=false got=false (non-numeric model idx)
+    audit_review_test.go:123: [OK] api-keys.openai-compatibility.X.models.0.display-name    want=false got=false (non-numeric provider idx)
+    audit_review_test.go:123: [OK] api-keys.openai-compatibility.1.models.0.display-name    want=false got=false (UNSELECTED provider)
+    audit_review_test.go:123: [OK] api-keys.openai-compatibility.0.models                   want=false got=false (count change)
+    audit_review_test.go:123: [OK] completely.unrelated.0.models.0.display-name             want=false got=false (wrong ancestor)
+    audit_review_test.go:123: [OK] api-keys.openai-compatibility.0.models.3.thinking.levels.x want=false got=false (non-numeric level)
+    audit_review_test.go:123: [OK] openai-compatibility.0.models.0.display-name             want=true  got=true  (legacy layout accepted)
+--- PASS: TestAudit_PathAllowed_0_1_1 (0.00s)
+=== RUN   TestAudit_CollectDiff_DepthCapFailOpen
+    audit_review_test.go:142: DIVERGENCE: change at depth 15 produced NO diff path -> validator cannot see it (fail-open, cap=12)
+--- PASS: TestAudit_CollectDiff_DepthCapFailOpen (0.00s)
+=== RUN   TestAudit_MultiDocument
+    audit_review_test.go:159: DIVERGENCE: encode dropped the 2nd YAML document -> silent data loss. out="api-keys:\n    openai-compatibility: []\n"
+--- PASS: TestAudit_MultiDocument (0.00s)
+=== RUN   TestAudit_EntryLevelAnchorSameProvider
+    audit_review_test.go:173: err=<nil> written=true changed_fields=true shaChanged=true
+    audit_review_test.go:176:   provider=Magpie skipped="models list contains yaml aliases; skipped for safety" changed=1 fieldCount=1
+    audit_review_test.go:180: DIVERGENCE: reported Skipped="models list contains yaml aliases; skipped for safety" yet file WAS written and semantically changed
+--- PASS: TestAudit_EntryLevelAnchorSameProvider (0.01s)
+=== RUN   TestAudit_CrossProviderAnchorBothSelected
+    audit_review_test.go:193: both providers selected: err=<nil> written=true
+    audit_review_test.go:196:   provider=Magpie skipped="" changed=1
+    audit_review_test.go:196:   provider=Magpie2 skipped="models list contains yaml aliases; skipped for safety" changed=0
+    audit_review_test.go:202: DIVERGENCE: "Magpie2" reported skipped but write proceeded (shared anchor leaked)
+--- PASS: TestAudit_CrossProviderAnchorBothSelected (0.01s)
+=== RUN   TestAudit_DisabledYesNotRecognised
+    audit_review_test.go:221: DIVERGENCE: `disabled: yes` not recognised; skipped="" written=true shaChanged=true err=<nil>
+--- PASS: TestAudit_DisabledYesNotRecognised (0.01s)
+PASS
+ok  	cpa-model-meta-sync	0.154s

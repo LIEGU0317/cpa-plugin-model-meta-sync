@@ -1,0 +1,10 @@
+{
+  "config_before_sha256": "aea6afa85a0941b93c34d645ae922c8280c420e4b6abd80e219b0d12e0d93813",
+  "config_after_sha256": "aea6afa85a0941b93c34d645ae922c8280c420e4b6abd80e219b0d12e0d93813",
+  "config_changed": false,
+  "backup": "/srv/cliproxyapi/config.yaml.bak-modelmetasync-deploy-20261030-151953",
+  "plugin_installed": "/srv/cliproxyapi/plugins/linux/amd64/model-meta-sync-v0.1.4.so",
+  "gateway_up": true,
+  "provider_count_before": 9,
+  "provider_count_after": 9
+}

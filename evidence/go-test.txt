@@ -1,0 +1,2 @@
+ok  	cpa-model-meta-sync	0.043s
+exit=0

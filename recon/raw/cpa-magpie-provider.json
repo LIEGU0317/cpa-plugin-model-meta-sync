@@ -1,0 +1,257 @@
+{
+ "base-url": "http://192.0.2.10:7509",
+ "disabled": false,
+ "models": [
+  {
+   "alias": "kimi-k3",
+   "display-name": "Kimi K3",
+   "input-modalities": [
+    "text",
+    "image"
+   ],
+   "max-context-length": 1048576,
+   "name": "auto/kimi-k3",
+   "output-modalities": [
+    "text"
+   ],
+   "thinking": {
+    "levels": [
+     "low",
+     "medium",
+     "high",
+     "max"
+    ]
+   }
+  },
+  {
+   "alias": "minimax-m3.1-flash",
+   "display-name": "MiniMax-M3.1-Flash",
+   "input-modalities": [
+    "text",
+    "image"
+   ],
+   "max-context-length": 1048576,
+   "name": "auto/minimax-m3.1-flash",
+   "output-modalities": [
+    "text"
+   ],
+   "thinking": {
+    "levels": [
+     "low",
+     "medium",
+     "high",
+     "xhigh",
+     "max"
+    ]
+   }
+  },
+  {
+   "alias": "deepseek-v4-flash",
+   "display-name": "DeepSeek V4 Flash 0731",
+   "input-modalities": [
+    "text"
+   ],
+   "max-context-length": 1048576,
+   "name": "auto/deepseek-v4-flash-0731",
+   "output-modalities": [
+    "text"
+   ],
+   "thinking": {
+    "levels": [
+     "low",
+     "medium",
+     "high",
+     "max"
+    ]
+   }
+  },
+  {
+   "alias": "deepseek-flash",
+   "display-name": "DeepSeek V4.1 Flash",
+   "input-modalities": [
+    "text",
+    "image"
+   ],
+   "max-context-length": 1000000,
+   "name": "auto/deepseek-v4.1-flash",
+   "output-modalities": [
+    "text"
+   ],
+   "thinking": {
+    "levels": [
+     "low",
+     "medium",
+     "high"
+    ]
+   }
+  },
+  {
+   "alias": "deepseek-flash",
+   "display-name": "DeepSeek V4.1 Flash 1017",
+   "input-modalities": [
+    "text",
+    "image"
+   ],
+   "max-context-length": 1000000,
+   "name": "auto/deepseek-v4.1-flash-1017",
+   "output-modalities": [
+    "text"
+   ],
+   "thinking": {
+    "levels": [
+     "low",
+     "medium",
+     "high"
+    ]
+   }
+  },
+  {
+   "alias": "minimax-m3",
+   "display-name": "MiniMax-M3",
+   "input-modalities": [
+    "text",
+    "image"
+   ],
+   "max-context-length": 1048576,
+   "name": "auto/minimax-m3",
+   "output-modalities": [
+    "text"
+   ],
+   "thinking": {
+    "levels": [
+     "none",
+     "low",
+     "medium",
+     "high"
+    ]
+   }
+  },
+  {
+   "alias": "GLM-5.3",
+   "display-name": "GLM-5.3",
+   "input-modalities": [
+    "text"
+   ],
+   "max-context-length": 1048576,
+   "name": "auto/glm-5.3",
+   "output-modalities": [
+    "text"
+   ],
+   "thinking": {
+    "levels": [
+     "low",
+     "medium",
+     "high"
+    ]
+   }
+  },
+  {
+   "alias": "Kimi K3",
+   "display-name": "Kimi K3",
+   "input-modalities": [
+    "text",
+    "image"
+   ],
+   "max-context-length": 1048576,
+   "name": "auto/kimi-k3",
+   "output-modalities": [
+    "text"
+   ],
+   "thinking": {
+    "levels": [
+     "low",
+     "medium",
+     "high",
+     "max"
+    ]
+   }
+  },
+  {
+   "alias": "deepseek-v4-pro",
+   "display-name": "DeepSeek V4 Pro",
+   "input-modalities": [
+    "text"
+   ],
+   "max-context-length": 1000000,
+   "name": "auto/deepseek-v4-pro",
+   "output-modalities": [
+    "text"
+   ],
+   "thinking": {
+    "levels": [
+     "low",
+     "medium",
+     "high",
+     "max"
+    ]
+   }
+  },
+  {
+   "alias": "deepseek-v4-pro",
+   "display-name": "DeepSeek V4 Pro 0813",
+   "input-modalities": [
+    "text"
+   ],
+   "max-context-length": 1000000,
+   "name": "auto/deepseek-v4-pro-0813",
+   "output-modalities": [
+    "text"
+   ],
+   "thinking": {
+    "levels": [
+     "low",
+     "medium",
+     "high",
+     "max"
+    ]
+   }
+  },
+  {
+   "alias": "glm-5.3-flash",
+   "display-name": "GLM-5.3-Flash",
+   "input-modalities": [
+    "text",
+    "image"
+   ],
+   "max-context-length": 1048576,
+   "name": "auto/glm-5.3-flash",
+   "output-modalities": [
+    "text"
+   ],
+   "thinking": {
+    "levels": [
+     "low",
+     "medium",
+     "high"
+    ]
+   }
+  },
+  {
+   "alias": "deepseek-flash",
+   "display-name": "DeepSeek-Flash",
+   "input-modalities": [
+    "text",
+    "image"
+   ],
+   "max-context-length": 1000000,
+   "name": "auto/dfmodel",
+   "output-modalities": [
+    "text"
+   ],
+   "thinking": {
+    "levels": [
+     "low",
+     "medium",
+     "high"
+    ]
+   }
+  }
+ ],
+ "name": "Magpie",
+ "priority": 9,
+ "keys": [
+  {
+   "api-key": "***REDACTED***"
+  }
+ ]
+}

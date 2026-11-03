@@ -1,0 +1,235 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
+)
+
+const (
+	pluginName    = "model-meta-sync"
+	pluginVersion = "0.1.1"
+	pluginAuthor  = "LIEGU0317"
+	pluginRepo    = "https://github.com/LIEGU0317/cpa-plugin-model-meta-sync"
+	routePrefix   = "/model-meta-sync"
+)
+
+type pluginState struct {
+	mu         sync.Mutex
+	syncMu     sync.Mutex
+	cfg        Config
+	configYAML []byte
+	pluginDir  string
+	last       *RunReport
+	startedAt  time.Time
+	stop       chan struct{}
+}
+
+var activeBackground = struct {
+	sync.Mutex
+	stop chan struct{}
+}{}
+
+func buildPlugin(configYAML []byte, pluginDir string) (*pluginState, error) {
+	cfg, errParse := parseConfig(configYAML)
+	if errParse != nil {
+		return nil, errParse
+	}
+	p := &pluginState{
+		cfg:        cfg,
+		configYAML: append([]byte(nil), configYAML...),
+		pluginDir:  pluginDir,
+		startedAt:  time.Now().UTC(),
+		stop:       make(chan struct{}),
+	}
+	p.startBackground()
+	return p, nil
+}
+
+func (p *pluginState) metadata() pluginapi.Metadata {
+	return pluginapi.Metadata{
+		Name:             pluginName,
+		Version:          pluginVersion,
+		Author:           pluginAuthor,
+		GitHubRepository: pluginRepo,
+		ConfigFields: []pluginapi.ConfigField{
+			{Name: "config_path", Type: pluginapi.ConfigFieldTypeString, Description: "Absolute path to the CPA config.yaml that owns provider model entries."},
+			{Name: "providers", Type: pluginapi.ConfigFieldTypeArray, Description: "openai-compatibility provider names to sync (default: Magpie)."},
+			{Name: "mode", Type: pluginapi.ConfigFieldTypeEnum, EnumValues: []string{"missing", "always"}, Description: "missing fills empty fields only; always recomputes configured fields."},
+			{Name: "fields", Type: pluginapi.ConfigFieldTypeArray, Description: "Subset of display-name, max-context-length, input-modalities, output-modalities, thinking."},
+			{Name: "timeout_seconds", Type: pluginapi.ConfigFieldTypeInteger, Description: "Upstream model-list request timeout in seconds."},
+			{Name: "sync_on_start", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Run one sync shortly after the plugin loads."},
+			{Name: "interval_minutes", Type: pluginapi.ConfigFieldTypeInteger, Description: "Repeat the sync every N minutes (0 disables)."},
+			{Name: "api_key", Type: pluginapi.ConfigFieldTypeString, Description: "Optional upstream key override; defaults to the provider's first configured key."},
+		},
+	}
+}
+
+func (p *pluginState) RegisterManagement(_ context.Context, _ pluginapi.ManagementRegistrationRequest) (pluginapi.ManagementRegistrationResponse, error) {
+	makeRoute := func(method, path, description string) pluginapi.ManagementRoute {
+		return pluginapi.ManagementRoute{
+			Method:      method,
+			Path:        path,
+			Description: description,
+			Handler:     p,
+		}
+	}
+	return pluginapi.ManagementRegistrationResponse{
+		Routes: []pluginapi.ManagementRoute{
+			makeRoute("GET", routePrefix+"/status", "Last model metadata sync report"),
+			makeRoute("GET", routePrefix+"/config", "Effective plugin configuration"),
+			makeRoute("GET", routePrefix+"/preview", "Dry-run: compute the model metadata patch without writing"),
+			makeRoute("POST", routePrefix+"/sync", "Fetch upstream /v1/models and write missing metadata into the provider config"),
+		},
+	}, nil
+}
+
+func (p *pluginState) HandleManagement(ctx context.Context, req pluginapi.ManagementRequest) (pluginapi.ManagementResponse, error) {
+	path := req.Path
+	if idx := len("/v0/management"); len(path) > idx && path[:idx] == "/v0/management" {
+		path = path[idx:]
+	}
+	switch {
+	case req.Method == "GET" && path == routePrefix+"/status":
+		return jsonResponse(200, p.statusPayload())
+	case req.Method == "GET" && path == routePrefix+"/config":
+		return jsonResponse(200, p.configPayload())
+	case (req.Method == "GET" || req.Method == "POST") && path == routePrefix+"/preview":
+		return p.handleSync(ctx, req, true)
+	case req.Method == "POST" && path == routePrefix+"/sync":
+		return p.handleSync(ctx, req, false)
+	default:
+		return jsonResponse(404, map[string]any{"ok": false, "error": "not found", "path": path, "method": req.Method})
+	}
+}
+
+func (p *pluginState) handleSync(ctx context.Context, req pluginapi.ManagementRequest, forceDryRun bool) (pluginapi.ManagementResponse, error) {
+	dryRun := forceDryRun
+	if !forceDryRun && req.Query != nil {
+		switch req.Query.Get("dry_run") {
+		case "1", "true", "yes":
+			dryRun = true
+		}
+	}
+	provider := ""
+	if req.Query != nil {
+		provider = req.Query.Get("provider")
+	}
+	report, errRun := p.runSync(ctx, syncOptions{DryRun: dryRun, Provider: provider})
+	if errRun != nil {
+		status := 502
+		if report != nil && (report.ConfigHashBefore == "" || strings.HasPrefix(report.Error, "no matching provider")) {
+			status = 400
+		}
+		return jsonResponse(status, report)
+	}
+	return jsonResponse(200, report)
+}
+
+func (p *pluginState) statusPayload() map[string]any {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := map[string]any{
+		"ok":         true,
+		"plugin":     pluginName,
+		"version":    pluginVersion,
+		"started_at": p.startedAt.Format(time.RFC3339),
+		"config":     redactedConfig(p.cfg),
+	}
+	if p.last != nil {
+		out["last_run"] = p.last
+	}
+	return out
+}
+
+func (p *pluginState) configPayload() map[string]any {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return map[string]any{"ok": true, "config": redactedConfig(p.cfg), "raw_config_yaml": string(p.configYAML)}
+}
+
+func redactedConfig(cfg Config) Config {
+	out := cfg
+	if out.APIKey != "" {
+		out.APIKey = "***"
+	}
+	return out
+}
+
+func (p *pluginState) storeReport(report *RunReport) {
+	p.mu.Lock()
+	p.last = report
+	p.mu.Unlock()
+}
+
+func jsonResponse(status int, payload any) (pluginapi.ManagementResponse, error) {
+	body, errMarshal := json.Marshal(payload)
+	if errMarshal != nil {
+		body = []byte(fmt.Sprintf(`{"ok":false,"error":%q}`, errMarshal.Error()))
+		status = 500
+	}
+	return pluginapi.ManagementResponse{
+		StatusCode: status,
+		Headers:    map[string][]string{"Content-Type": {"application/json; charset=utf-8"}},
+		Body:       body,
+	}, nil
+}
+
+// ---------------------------------------------------------------------------
+// background scheduling
+// ---------------------------------------------------------------------------
+
+func (p *pluginState) startBackground() {
+	activeBackground.Lock()
+	if activeBackground.stop != nil {
+		close(activeBackground.stop)
+		activeBackground.stop = nil
+	}
+	stop := make(chan struct{})
+	activeBackground.stop = stop
+	activeBackground.Unlock()
+
+	interval := time.Duration(p.cfg.IntervalMinutes) * time.Minute
+	if !p.cfg.SyncOnStart && interval <= 0 {
+		return
+	}
+	go func() {
+		if p.cfg.SyncOnStart {
+			select {
+			case <-stop:
+				return
+			case <-time.After(3 * time.Second):
+			}
+			p.backgroundSync()
+		}
+		if interval <= 0 {
+			return
+		}
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				p.backgroundSync()
+			}
+		}
+	}()
+}
+
+func (p *pluginState) backgroundSync() {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	report, errRun := p.runSync(ctx, syncOptions{DryRun: false})
+	if errRun != nil {
+		if report != nil {
+			report.Error = errRun.Error()
+		}
+	}
+}

@@ -1,0 +1,40 @@
+== reset fixture ==
+== T1 management auth ==
+== T2 preview is read-only ==
+== T3 apply sync ==
+PASS  T3 semantic values corrected
+== T4 idempotency ==
+== T5 upstream failure leaves config intact ==
+== T6 pagination ==
+== T7 unknown provider ==
+== T8 missing mode ==
+PASS  T8 missing filled stripped, preserved existing
+== T9 gateway still serves ==
+
+PASS  T1 status without key rejected  (401)
+PASS  T1 status with key  (200)
+PASS  T1 plugin id  (model-meta-sync)
+PASS  T2 preview http  (200)
+PASS  T2 preview no write  (2bac933300f147eb1d3caf9813b42f7f591c36c438fc80bc90316e88c3f1e053)
+PASS  T2 preview reports changes  (True)
+PASS  T2 preview dry_run flag  (True)
+PASS  T3 sync http  (200)
+PASS  T3 sync written  (True)
+PASS  T3 sync ok  (True)
+PASS  T3 backup exists  (yes)
+PASS  T3 hot reload observed  (1)
+PASS  T4 second sync http  (200)
+PASS  T4 no changes  (0)
+PASS  T4 not written  (False)
+PASS  T5 failure http  (502)
+PASS  T5 failure ok=false  (False)
+PASS  T5 config unchanged  (4d159593823a842bdcb96e34f54b20a0e4692dd8f5e8b7cccf8fd165398687c1)
+PASS  T6 paged preview http  (200)
+PASS  T6 paged upstream count  (34)
+PASS  T6 paged matched  (12)
+PASS  T7 unknown provider http  (400)
+PASS  T8 missing sync http  (200)
+PASS  T9 /v1/models http  (200)
+PASS  T9 /v1/models has data  (True)
+
+PASS=27 FAIL=0

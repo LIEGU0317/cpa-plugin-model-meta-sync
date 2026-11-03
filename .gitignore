@@ -1,0 +1,19 @@
+# Plugin build outputs
+build/
+*.so
+*.dylib
+*.dll
+*.h
+plugin/cpa-model-meta-sync
+
+# Local sandboxes and toolchains
+.sandbox/
+.toolchain/
+__pycache__/
+*.pyc
+
+# Logs and local state
+*.log
+*.out
+config.yaml
+config.yaml.bak-*

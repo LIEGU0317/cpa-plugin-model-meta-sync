@@ -1,0 +1,63 @@
+=== RUN   TestV2_CrossProviderEntryAnchorBothSelected
+    audit_v2_test.go:22: err=<nil> written=true
+    audit_v2_test.go:25:   provider=Magpie skipped="" changed=1
+    audit_v2_test.go:25:   provider=Magpie2 skipped="models list uses yaml anchors/aliases; skipped for safety" changed=0
+    audit_v2_test.go:28: result:
+        api-keys:
+            openai-compatibility:
+                - name: "Magpie"
+                  base-url: "http://127.0.0.1:41611"
+                  models:
+                    - &shared
+                      display-name: UP-alpha
+                      name: "alpha"
+                - name: "Magpie2"
+                  base-url: "http://127.0.0.1:41611"
+                  models:
+                    - *shared
+    audit_v2_test.go:30: BYPASS-PRESENT: shared entry anchor mutated across providers
+--- PASS: TestV2_CrossProviderEntryAnchorBothSelected (0.02s)
+=== RUN   TestV2_ProviderNodeAnchored
+    audit_v2_test.go:44: err=refusing to write: unexpected config changes: api-keys.openai-compatibility.1.models.0.display-name written=false out=
+        api-keys:
+            openai-compatibility:
+                - &p
+                  name: "Magpie"
+                  base-url: "http://127.0.0.1:34261"
+                  models:
+                    - name: "alpha"
+                - *p
+--- PASS: TestV2_ProviderNodeAnchored (0.01s)
+=== RUN   TestV2_NestedThinkingAlias
+    audit_v2_test.go:55: err=<nil> written=false out=
+        anchors:
+            lv: &lv
+                levels: ["low"]
+        api-keys:
+            openai-compatibility:
+                - name: "Magpie"
+                  base-url: "http://127.0.0.1:44277"
+                  models:
+                    - name: "alpha"
+                      thinking: *lv
+    audit_v2_test.go:57: OK: anchor definition preserved
+--- PASS: TestV2_NestedThinkingAlias (0.01s)
+=== RUN   TestV2_SameProviderEntryAliasNoWrite
+    audit_v2_test.go:73: OK: fully skipped, no write (skipped="models list uses yaml anchors/aliases; skipped for safety", err=<nil>)
+--- PASS: TestV2_SameProviderEntryAliasNoWrite (0.00s)
+=== RUN   TestV2_DisabledTruthy
+    audit_v2_test.go:92: [OK] disabled: yes   -> skipped="provider disabled" shaUnchanged=true
+    audit_v2_test.go:92: [OK] disabled: on    -> skipped="provider disabled" shaUnchanged=true
+    audit_v2_test.go:92: [OK] disabled: True  -> skipped="provider disabled" shaUnchanged=true
+    audit_v2_test.go:92: [OK] disabled: TRUE  -> skipped="provider disabled" shaUnchanged=true
+    audit_v2_test.go:92: [OK] disabled: true  -> skipped="provider disabled" shaUnchanged=true
+--- PASS: TestV2_DisabledTruthy (0.00s)
+=== RUN   TestV2_MultiDocumentRefused
+    audit_v2_test.go:105: multi-doc: err=config file contains 2 YAML documents; refusing to rewrite multi-document configs written=false
+    audit_v2_test.go:108: OK: file untouched
+--- PASS: TestV2_MultiDocumentRefused (0.00s)
+=== RUN   TestV2_DepthFailClosed
+    audit_v2_test.go:130: OK: depth overflow recorded as "k.k.k.k.k.k.k.k.k.k.k.k.k" -> validator will reject
+--- PASS: TestV2_DepthFailClosed (0.00s)
+PASS
+ok  	cpa-model-meta-sync	0.052s
