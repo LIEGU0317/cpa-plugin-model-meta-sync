@@ -144,7 +144,7 @@ jobs:
             ext: so
             cpa_os: linux
             cpa_arch: amd64
-            cpa_bin: cliproxyapi
+            cpa_bin: cli-proxy-api
             optional: false
           - goos: linux
             goarch: arm64
@@ -152,7 +152,7 @@ jobs:
             ext: so
             cpa_os: linux
             cpa_arch: aarch64
-            cpa_bin: cliproxyapi
+            cpa_bin: cli-proxy-api
             optional: false
           - goos: windows
             goarch: amd64
@@ -160,7 +160,7 @@ jobs:
             ext: dll
             cpa_os: windows
             cpa_arch: amd64
-            cpa_bin: cliproxyapi.exe
+            cpa_bin: cli-proxy-api.exe
             optional: false
           - goos: darwin
             goarch: amd64
@@ -168,7 +168,7 @@ jobs:
             ext: dylib
             cpa_os: darwin
             cpa_arch: amd64
-            cpa_bin: cliproxyapi
+            cpa_bin: cli-proxy-api
             optional: true
           - goos: darwin
             goarch: arm64
@@ -176,7 +176,7 @@ jobs:
             ext: dylib
             cpa_os: darwin
             cpa_arch: aarch64
-            cpa_bin: cliproxyapi
+            cpa_bin: cli-proxy-api
             optional: true
     defaults:
       run:
