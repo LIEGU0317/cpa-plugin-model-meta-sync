@@ -6,6 +6,10 @@ build/
 *.h
 plugin/cpa-model-meta-sync
 
+# Published release artifacts are tracked: prebuilt plugin + checksum per platform
+!plugins/
+!plugins/**/*.so
+
 # Local sandboxes and toolchains
 .sandbox/
 .toolchain/

@@ -136,7 +136,7 @@ Magpie 的 `/v1/models` 比 CPA 的模型条目**多出 6 类字段、少 1 类�
 ```
 
 - 全部 provider 行字段实测只有：`base-url / disabled / keys / models / name / priority`（v8 里 `keys` 等价于老版的 `api-key-entries`；`api-keys.openai-compatibility[*]` 的共享字段白名单见 `internal/config/config_v8.go:384-388`，含 `priority/prefix/proxy-url/headers/models/excluded-models/disable-cooling/request-retry/request-scoped-errors`）。
-- CPA 用的调用方 key 是 `caller-keys.json[0]`（`name=CLIPro…`，14 字符非 `sk-` 形态）；证据：CPA 日志 `auth=api_key=a@zL…KhXB`（脱敏）与 key[0] 前缀一致。
+- CPA 用的调用方 key 是 `caller-keys.json[0]`（`name=CLIPro…`，14 字符非 `sk-` 形态）；证据：CPA 日志里该 key 已整体脱敏为 `<redacted>`，与 key[0] 逐位一致（比对在只读会话中完成）。
 
 ### 2.2 12 条模型条目原文（脱敏后原样，无密钥）
 
@@ -392,10 +392,10 @@ b=json.load(urllib.request.urlopen(r, timeout=15)); print(len(b[\"data\"]))"'
 
 ```
 [2026-10-30 12:29:08] [warn] openai-compatible-magpie executor: upstream served model "DeepSeek-Flash"
-  for requested model "auto/dfmodel" (auth_index=ed5030c04552bb71)
-[2026-10-30 12:24:16] [info] session-affinity: ... auth=openai-compatibility:magpie:ed995e2ae494 provider=mixed model=deepseek-flash
+  for requested model "auto/dfmodel" (auth_index=<auth-index>)
+[2026-10-30 12:24:16] [info] session-affinity: ... auth=openai-compatibility:<provider-id>:<auth-id> provider=mixed model=deepseek-flash
 [2026-10-30 12:32:14] [warn] 504 | 1m0.08s | upstream execution failed: provider=openai-compatible-magpie
-  model=auto/dfmodel auth=api_key=a@zL...KhXB err=<html>...
+  model=auto/dfmodel auth=api_key=<redacted> err=<html>...
 ```
 
 - 第 1 条说明 Magpie 会用自己的 `display_name` 返写响应里的 `model` 字段（`DeepSeek-Flash`），与请求的 `auto/dfmodel` 不一致 → CPA 侧可考虑 `force-mapping: true`（**推断**，未实测其效果）。

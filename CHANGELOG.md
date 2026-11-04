@@ -8,6 +8,8 @@
 - Reports carry the path that worked (`models_path`), never the host.
 - Applying models in the CPAMC editor triggers a config reload and therefore the plugin's startup
   sync, so metadata lands in the same operation (`sync_on_start: true`).
+- Prebuilt `plugins/linux/amd64/model-meta-sync-v0.3.0.so` (with `.sha256`) ships in the repository;
+  `make build` now writes to `plugins/<goos>/<goarch>/` instead of `build/`.
 
 ## 0.2.2
 

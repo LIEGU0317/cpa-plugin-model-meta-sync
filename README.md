@@ -75,14 +75,29 @@ different endpoint from `gpt-4o`.
 
 ## Install
 
-1. Build (Go >= 1.26 + C toolchain for the target arch):
+A prebuilt **linux/amd64** plugin is published in this repository together with its checksum:
+
+```text
+plugins/linux/amd64/model-meta-sync-v0.3.0.so
+plugins/linux/amd64/model-meta-sync-v0.3.0.so.sha256
+```
+
+1. Install the prebuilt artifact (or build it yourself, next step):
+
+   ```bash
+   sha256sum -c model-meta-sync-v0.3.0.so.sha256
+   install -m 0755 model-meta-sync-v0.3.0.so <cpa>/plugins/linux/amd64/
+   ```
+
+   Building from source needs Go >= 1.26 plus a C toolchain for the target arch; `make build` writes
+   the plugin and its `.sha256` into `plugins/<goos>/<goarch>/`:
 
    ```bash
    make build GOOS=linux GOARCH=amd64
-   # -> build/model-meta-sync-v0.2.0.so
+   # -> plugins/linux/amd64/model-meta-sync-v0.3.0.so (+ .sha256)
    ```
 
-2. Copy the `.so` to `<cpa>/plugins/<goos>/<goarch>/model-meta-sync-v0.2.0.so`.
+2. Copy the `.so` to `<cpa>/plugins/<goos>/<goarch>/model-meta-sync-v0.3.0.so`.
 
 3. Add the config block to `config.yaml` and restart CPA once (the plugin host scans `.so` files at
    startup):
