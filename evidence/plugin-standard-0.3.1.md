@@ -156,8 +156,49 @@ $ make vet
 `plugin/metadata_test.go` 覆盖：必填元数据非空、版本为点分数字、`Logo` 为指向本仓库的 https 图片、
 `ConfigFields` 与 `Config` 的 yaml 键集合互为子集、字段默认值与 `parseConfig` 一致、枚举默认值合法。
 
-## 5. 结论
+
+## 5. 平台冒烟：每个平台的产物都用同平台真实宿主加载过
+
+`scripts/smoke-test.sh` 在目标平台上下载官方 CLIProxyAPI 二进制，把构建出的归档装进
+`plugins/<goos>/<goarch>/`，然后断言：注册元数据（版本 / logo / 14 条 config_fields）、mock 上游同步
+真实写盘、`config successfully reloaded`、二次同步 `written=false`。CI 运行
+`41795553847`、`41796172714` 的结果：
+
+| 平台 | 构建 runner | 真实宿主加载 | 结果 |
+|---|---|---|---|
+| linux/amd64 | ubuntu-24.04 | CLIProxyAPI 8.0.53 linux_amd64 | PASS：注册 + 同步 + 热重载 + 幂等 |
+| linux/arm64 | ubuntu-24.04-arm | CLIProxyAPI 8.0.53 linux_aarch64 | PASS：同上 |
+| windows/amd64 | windows-2025 | CLIProxyAPI 8.0.53 windows_amd64 | PASS：同上（首次因 mock 未就绪 502，已加就绪等待） |
+| darwin/arm64 | macos-15 | CLIProxyAPI 8.0.53 darwin_aarch64 | PASS：同上 |
+| darwin/amd64 | macos-15-intel | CLIProxyAPI 8.0.53 darwin_amd64 | FAIL：宿主在 `callRegister` 内崩溃 |
+
+darwin/amd64 的失败不是本插件的产物问题，而是 macOS Intel 上的宿主限制。用官方插件对照
+（probe workflow，`macos-15-intel` + CLIProxyAPI 8.0.53 darwin_amd64 + 官方
+`antigravity-priority_1.2.23_darwin_amd64.zip`）：
+
+```text
+[warn] pluginhost: failed to load plugin antigravity-priority from
+       plugins/darwin/amd64/antigravity-priority-v1.2.23.dylib: dlopen ...:
+       preflight probe failed (exit status 2): fatal error: addspecial on invalid pointer
+```
+
+本插件的崩溃点是同一机制的另一半：
+
+```text
+runtime: g 37: unexpected return pc for runtime.cgocallback called from 0x104625368
+  ... _cgoexp_8bb65f1557b6_ModelMetaSyncPluginCall+0x0
+  ... runtime.cgocallbackg / runtime.cgocallback
+  ... pluginhost.callPluginRaw ... callRegister
+```
+
+两边宿主与插件都是 go1.26.10 构建（`strings` 查 `cli-proxy-api` 得 `go1.26.10`），即 darwin/amd64 上
+「一个进程里两个 Go runtime」的已知冲突。因此 darwin/amd64 的冒烟任务标记为 informational
+（`continue-on-error`），不阻塞发布；归档仍然发布，供宿主修复后直接可用。
+
+## 6. 结论
 
 0.3.1 在三个层面同时满足插件标准：注册元数据（含 `Logo` 与 14 条 `ConfigFields`）、发布产物
 （zip + `checksums.txt`，被真实安装器接受）、商店登记条目（被真实 `ParseRegistry` 接受）。
 功能面无回归：启动 dry-run、真实写入、热重载、幂等均与 0.3.0 文档一致。
+平台层面：linux/amd64、linux/arm64、windows/amd64、darwin/arm64 由真实宿主加载验证通过；
+darwin/amd64 受宿主在 macOS Intel 上无法加载 Go c-shared 插件的限制（官方插件同样失败）。

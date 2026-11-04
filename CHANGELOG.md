@@ -21,6 +21,12 @@
 - `store/` documents the store entry and the release contract; `scripts/render-icon.sh` regenerates
   the PNG icon set from `assets/icon.svg`; `plugin/README.md` no longer duplicates (and contradict)
   the root README.
+- **Platform smoke tests.** `scripts/smoke-test.sh` loads each built archive in a real CLIProxyAPI
+  binary of the same platform, asserts the registered metadata, syncs a mock upstream, verifies the
+  config was enriched and hot-reloaded and that a second run writes nothing. CI runs it for
+  linux/amd64, linux/arm64, windows/amd64, darwin/arm64 (all pass) and darwin/amd64 (informational:
+  macOS Intel hosts fail to load any Go `c-shared` plugin, including the official
+  `antigravity-priority`).
 
 ## 0.3.0
 

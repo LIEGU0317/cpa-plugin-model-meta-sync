@@ -71,6 +71,20 @@ YAML
 
 python3 "${repo_root}/scripts/smoke-upstream.py" "${UPSTREAM_PORT}" &
 upstream_pid=$!
+# The plugin reports HTTP 502 when every upstream fails, so make sure the mock
+# catalog answers before the host is asked to sync.
+upstream_ready=""
+for _ in $(seq 1 30); do
+    if curl -fsS "http://127.0.0.1:${UPSTREAM_PORT}/v1/models" >/dev/null 2>&1; then
+        upstream_ready="yes"
+        break
+    fi
+    sleep 1
+done
+if [[ -z "${upstream_ready}" ]]; then
+    echo "mock upstream did not start on ${UPSTREAM_PORT}" >&2
+    exit 1
+fi
 cleanup() {
     kill "${cpa_pid:-0}" 2>/dev/null || true
     kill "${upstream_pid}" 2>/dev/null || true

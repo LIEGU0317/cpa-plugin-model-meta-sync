@@ -245,7 +245,26 @@ checksums.txt
 
 `.github/workflows/build.yml` builds every platform with CGO, packages with
 `plugin/cmd/zipdist` (which re-verifies the archive layout the host installer accepts) and publishes
-the assets. Locally:
+the assets. A `smoke` job then loads each archive in a **real CLIProxyAPI binary for that platform**
+(`scripts/smoke-test.sh`): it asserts the registered metadata, syncs a mock upstream, checks the
+config was enriched and hot-reloaded, and that a second run writes nothing.
+
+| Platform | Built | Loaded by a real host |
+|---|---|---|
+| linux/amd64 | CI, native x86-64 | **yes** - registration, sync, hot reload, idempotent |
+| linux/arm64 | CI, native arm64 | **yes** - same checks |
+| windows/amd64 | CI, native x86-64 | **yes** - same checks |
+| darwin/arm64 | CI, native Apple silicon | **yes** - same checks |
+| darwin/amd64 | CI, native Intel | **no** - the host itself fails on macOS Intel (see below) |
+
+`darwin/amd64` is published because the store installs per platform, but macOS **Intel** hosts cannot
+load Go `c-shared` plugins at all in CLIProxyAPI v8.0.53: the same run fails for the official
+`antigravity-priority` plugin (`preflight probe failed ... fatal error: addspecial on invalid pointer`)
+and for this one (`runtime: unexpected return pc for runtime.cgocallback`), i.e. two Go runtimes in one
+process. Apple-silicon macOS, Linux and Windows are unaffected. The smoke entry for darwin/amd64 is
+therefore informational and never blocks a release.
+
+Locally:
 
 ```bash
 make build      # plugins/<goos>/<goarch>/model-meta-sync-v<version>.so (+ .sha256)
@@ -285,6 +304,9 @@ is not part of this repository; results are archived under [`evidence/`](evidenc
 - Overwriting `thinking` can downgrade clients requesting an unsupported level, because CPA clamps to
   the nearest level (ties choose the lower one). `thinking` stays fill-if-empty by default.
 - Installing/upgrading the plugin needs one CPA restart; syncing data afterwards is hot-reload only.
+- macOS **Intel** (darwin/amd64) cannot load this plugin because the host crashes while registering
+  *any* Go `c-shared` plugin there - the official `antigravity-priority` plugin fails the same way.
+  Linux, Windows and Apple-silicon macOS are verified in CI with a real host.
 - Catalog discovery covers `/v1/models` and `/models`; anything else needs a `models_paths` entry,
   otherwise that provider is reported as an upstream error and skipped.
 
