@@ -75,3 +75,8 @@ changes only `registry.json`, and include:
 - the repository URL and the latest `v<version>` tag,
 - evidence that the platform zip and `checksums.txt` exist in that release,
 - one sentence on the capability the plugin adds.
+
+Submitted: [CLIProxyAPI-Plugins-Store#327](https://github.com/router-for-me/CLIProxyAPI-Plugins-Store/pull/327)
+(entry appended at the end, per the ordering rule for newly introduced plugins;
+the fork branch is `LIEGU0317:add-model-meta-sync`). Until it merges, install
+from a release archive as described in the root README.
