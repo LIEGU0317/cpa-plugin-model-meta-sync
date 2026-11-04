@@ -82,6 +82,10 @@ plugins/linux/amd64/model-meta-sync-v0.3.0.so
 plugins/linux/amd64/model-meta-sync-v0.3.0.so.sha256
 ```
 
+The published binary is built from this source (`-trimpath`, `CGO_ENABLED=1`, Go 1.27.1) and its
+sha256 is `c7055a32c96a41f53bcd8cfbdaa04a8a3788aed5121501906c0c40de1534d9ef` — the same build that runs
+in production. The `v0.3.0` release carries the identical file as an asset.
+
 1. Install the prebuilt artifact (or build it yourself, next step):
 
    ```bash
