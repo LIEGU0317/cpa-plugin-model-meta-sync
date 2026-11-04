@@ -92,7 +92,12 @@ for _ in $(seq 1 60); do
 done
 if [[ -z "${ready}" ]]; then
     echo "CPA did not answer on ${base}" >&2
-    tail -40 "${work}/cpa.log" >&2 || true
+    echo "--- cpa.log (head) ---" >&2
+    head -60 "${work}/cpa.log" >&2 || true
+    echo "--- fatal lines ---" >&2
+    grep -m 10 -E "fatal error|SIG[A-Z]+|panic:|dyld|code signature|not valid" "${work}/cpa.log" >&2 || true
+    echo "--- cpa.log (tail) ---" >&2
+    tail -20 "${work}/cpa.log" >&2 || true
     exit 1
 fi
 
