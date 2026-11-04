@@ -172,6 +172,12 @@ $ make vet
 | darwin/arm64 | macos-15 | CLIProxyAPI 8.0.53 darwin_aarch64 | PASS：同上 |
 | darwin/amd64 | macos-15-intel | CLIProxyAPI 8.0.53 darwin_amd64 | FAIL：宿主在 `callRegister` 内崩溃 |
 
+上表来自「构建产物」冒烟（run `41795553847` / `41797631780`）。此外 `41798510754`
+（`workflow_dispatch -f release_tag=v0.3.1`）直接对**已发布的 release 资产**做同一套冒烟：每个平台任务
+先 `gh release download` 取回 `model-meta-sync_0.3.1_<goos>_<goarch>.zip` 与 `checksums.txt`，按对应行
+校验 sha256（日志 `model-meta-sync_0.3.1_linux_amd64.zip: OK`），再装进官方宿主运行。结论与上表一致：
+linux/amd64、linux/arm64、windows/amd64、darwin/arm64 PASS，darwin/amd64 仍是宿主限制。
+
 darwin/amd64 的失败不是本插件的产物问题，而是 macOS Intel 上的宿主限制。用官方插件对照
 （probe workflow，`macos-15-intel` + CLIProxyAPI 8.0.53 darwin_amd64 + 官方
 `antigravity-priority_1.2.23_darwin_amd64.zip`）：
