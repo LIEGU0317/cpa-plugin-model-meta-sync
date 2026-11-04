@@ -118,11 +118,12 @@ A convenience build is also tracked in the repository:
 
 ```text
 plugins/linux/amd64/model-meta-sync-v0.3.1.so
-plugins/linux/amd64/model-meta-sync-v0.3.1.so.sha256   # b57dd2bec35a383eeab39655efe86fa6874ac221b91590aadea29a04445a0e1d
+plugins/linux/amd64/model-meta-sync-v0.3.1.so.sha256   # 5e29f03ddfc273e54cb4e9ee38f689ac15364a21a96a89259a6e39aaf3f044b3
 ```
 
-It comes from this source with `-trimpath`, `CGO_ENABLED=1`, Go 1.26.10 and the CPA v8.0.47 SDK -
-`go version -m plugins/linux/amd64/model-meta-sync-v0.3.1.so` reports exactly that.
+It is the exact library from `model-meta-sync_0.3.1_linux_amd64.zip` in the `v0.3.1` release (unzip it
+and you get the same sha256), built from this source with `-trimpath`, `CGO_ENABLED=1`, Go 1.26.10 and
+the CPA v8.0.47 SDK - which is what `go version -m` on the artifact reports.
 
 ### From source
 

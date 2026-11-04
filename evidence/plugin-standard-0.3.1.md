@@ -9,25 +9,44 @@ zip 布局、checksums 格式）与 CPA 源码 `internal/pluginstore/{registry,i
 
 ## 1. 发布产物布局
 
-```text
-$ make dist GOOS=linux GOARCH=amd64 CC=x86_64-linux-gnu-gcc
-$ make verify-dist GOOS=linux GOARCH=amd64
-zip layout ok: ../dist/model-meta-sync_0.3.1_linux_amd64.zip (model-meta-sync.so, 3136185 bytes)
+`v0.3.1` 由 `.github/workflows/build.yml` 在 tag 上构建并发布（5 个平台全部成功）：
 
-$ unzip -l dist/model-meta-sync_0.3.1_linux_amd64.zip
+```text
+$ gh run view 41791952456
+✓ Test            ✓ Build darwin/amd64   ✓ Build linux/arm64
+✓ Build linux/amd64  ✓ Build darwin/arm64  ✓ Build windows/amd64   ✓ Release
+
+$ gh release view v0.3.1 --json assets
+checksums.txt                          524 bytes
+model-meta-sync_0.3.1_darwin_amd64.zip   2989123
+model-meta-sync_0.3.1_darwin_arm64.zip   2756322
+model-meta-sync_0.3.1_linux_amd64.zip    3136251
+model-meta-sync_0.3.1_linux_arm64.zip    2846600
+model-meta-sync_0.3.1_windows_amd64.zip  3058752
+
+$ cat checksums.txt
+b97a42d07d4b50285641d9ecb0c2f5cf3067b6e51e0fd839ee586a8f37af41a4  model-meta-sync_0.3.1_darwin_amd64.zip
+0b73039229310dfd9aacabcb6e2fdd1dba6b48a4dcb9a83f6d2b472626f66594  model-meta-sync_0.3.1_darwin_arm64.zip
+078d81a2596e03a8e0e63890face121922ed0773729868f66e016cbffa2c9391  model-meta-sync_0.3.1_linux_amd64.zip
+2fc0486c0e0309fcd6ba8fe21fdf6cc3e6dd5a20f9cca77311cfe37780266c13  model-meta-sync_0.3.1_linux_arm64.zip
+b25f8b523cbc6402f8d8c48ed84f013e73df45372dcfcdb420c44d0319df2a0e  model-meta-sync_0.3.1_windows_amd64.zip
+
+$ unzip -l model-meta-sync_0.3.1_linux_amd64.zip
   Length      Date    Time    Name
 ---------  ---------- -----   ----
-  7122288  1980-01-01 08:00   model-meta-sync.so
+  7720288  1980-01-01 08:00   model-meta-sync.so
 ---------                     -------
-  7122288                     1 file
-
-$ cat dist/checksums.txt
-5b213852eeaef7d4a4feb7abccff80153fcf2a0bc15c5b46c898249287e98d2d  model-meta-sync_0.3.1_linux_amd64.zip
-4e016d19e112609d7e6501ee444bbdecbad706f0888abf0039604e0fba1d6d52  model-meta-sync_0.3.1_linux_arm64.zip
+  7720288                     1 file
 ```
 
 zip 根目录仅一个动态库、文件名等于 `<id>.<ext>`、无嵌套路径 —— 与 `internal/pluginstore/install.go`
-`readTargetLibrary` 的接受条件一致；`plugin/cmd/zipdist` 的 `-verify` 会在 CI 中重复这一检查。
+`readTargetLibrary` 的接受条件一致；`plugin/cmd/zipdist` 的 `-verify` 在 CI 的每个平台任务里都会
+重复这一检查，`-checksums` 在 Release 任务里生成 `checksums.txt`。
+
+仓库内跟踪的 `plugins/linux/amd64/model-meta-sync-v0.3.1.so` 就是发布 zip 内的同一份库
+（sha256 `5e29f03ddfc273e54cb4e9ee38f689ac15364a21a96a89259a6e39aaf3f044b3`）。本机交叉编译
+（`CC=x86_64-linux-gnu-gcc`）产出与 CI（ubuntu-24.04 原生 gcc）只有 C 工具链不同、源码与 Go
+工具链相同，因此字节不同；对外以 release 资产为准。
 
 ## 2. 用 CPA 真实代码校验登记条目与安装
 
@@ -42,20 +61,22 @@ $ go test ./internal/pluginstore -run 'TestModelMetaSync' -v
       tags=[Management Models]
 --- PASS: TestModelMetaSyncRegistryEntry (0.00s)
 === RUN   TestModelMetaSyncArchiveInstalls
-    install ok: /tmp/TestModelMetaSyncArchiveInstalls.../001/linux/arm64/model-meta-sync-v0.3.1.so (7122288 bytes)
---- PASS: TestModelMetaSyncArchiveInstalls (0.20s)
+    install ok: .../001/linux/amd64/model-meta-sync-v0.3.1.so (7720288 bytes)
+--- PASS: TestModelMetaSyncArchiveInstalls (0.14s)
 PASS
-ok  github.com/router-for-me/CLIProxyAPI/v8/internal/pluginstore  0.222s
+ok  github.com/router-for-me/CLIProxyAPI/v8/internal/pluginstore  0.158s
 ```
 
 - `ParseRegistry` 接受 `store/registry-entry.json`（包在 `{"schema_version":1,"plugins":[...]}` 里）。
-- `InstallArchive` 把 `model-meta-sync_0.3.1_linux_arm64.zip` 安装为
-  `plugins/linux/arm64/model-meta-sync-v0.3.1.so`（商店安装的最终路径与文件名）。
+- `InstallArchive` 把**下载自 release 的** `model-meta-sync_0.3.1_linux_amd64.zip` 安装为
+  `plugins/linux/amd64/model-meta-sync-v0.3.1.so`（商店安装的最终路径与文件名）；本机构建的
+  `..._linux_arm64.zip` 同样通过。
 - 同一测试确认旧的「裸 `.so` 资产」不是可安装归档（`InstallArchive` 拒绝非 zip 输入）。
 
 ## 3. 真实宿主端到端（CPA v8.0.47 沙箱，linux/arm64）
 
-宿主：由 `v8.0.47` 源码 `go build ./cmd/server` 构建；插件：`model-meta-sync-v0.3.1.so`；
+宿主：由 `v8.0.47` 源码 `go build ./cmd/server` 构建；插件：本机 arm64 构建的
+`model-meta-sync-v0.3.1.so`（与发布 zip 同源）；
 上游：本地 mock `GET /v1/models`（2 个模型，带 display_name / context_length / modalities / reasoning levels）。
 
 ```text
