@@ -125,10 +125,120 @@ jobs:
           path: dist/*.zip
           if-no-files-found: error
 
+  # Platform proof: the archive is loaded by a real CLIProxyAPI binary for the
+  # same platform, then registers, syncs a mock upstream and hot-reloads.
+  # darwin entries are informational (an unsigned dylib may be refused by a
+  # hardened-runtime host) and never block a release.
+  smoke:
+    name: Smoke ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: build
+    runs-on: ${{ matrix.runner }}
+    continue-on-error: ${{ matrix.optional }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            runner: ubuntu-24.04
+            ext: so
+            cpa_os: linux
+            cpa_arch: amd64
+            cpa_bin: cliproxyapi
+            optional: false
+          - goos: linux
+            goarch: arm64
+            runner: ubuntu-24.04-arm
+            ext: so
+            cpa_os: linux
+            cpa_arch: aarch64
+            cpa_bin: cliproxyapi
+            optional: false
+          - goos: windows
+            goarch: amd64
+            runner: windows-2025
+            ext: dll
+            cpa_os: windows
+            cpa_arch: amd64
+            cpa_bin: cliproxyapi.exe
+            optional: false
+          - goos: darwin
+            goarch: amd64
+            runner: macos-15-intel
+            ext: dylib
+            cpa_os: darwin
+            cpa_arch: amd64
+            cpa_bin: cliproxyapi
+            optional: true
+          - goos: darwin
+            goarch: arm64
+            runner: macos-15
+            ext: dylib
+            cpa_os: darwin
+            cpa_arch: aarch64
+            cpa_bin: cliproxyapi
+            optional: true
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download built archives
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Resolve release metadata
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="0.0.0-dev"
+          fi
+          echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"
+
+      - name: Fetch CLIProxyAPI for ${{ matrix.cpa_os }}/${{ matrix.cpa_arch }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$(gh release view --repo router-for-me/CLIProxyAPI --json tagName -q .tagName)"
+          version="${tag#v}"
+          mkdir -p cpa
+          gh release download "${tag}" --repo router-for-me/CLIProxyAPI \
+            --pattern "CLIProxyAPI_${version}_${{ matrix.cpa_os }}_${{ matrix.cpa_arch }}.tar.gz" \
+            --pattern "CLIProxyAPI_${version}_${{ matrix.cpa_os }}_${{ matrix.cpa_arch }}.zip" \
+            --dir cpa || true
+          cd cpa
+          for archive in *.tar.gz; do [[ -e "${archive}" ]] && tar -xzf "${archive}"; done
+          for archive in *.zip; do [[ -e "${archive}" ]] && unzip -o -q "${archive}"; done
+          bin="$(find . -maxdepth 3 -type f -name '${{ matrix.cpa_bin }}' | head -1)"
+          if [[ -z "${bin}" ]]; then
+            echo "CLIProxyAPI ${tag} has no ${{ matrix.cpa_os }}/${{ matrix.cpa_arch }} binary" >&2
+            ls -la >&2
+            exit 1
+          fi
+          chmod +x "${bin}"
+          echo "CPA_BIN=$(cd "$(dirname "${bin}")" && pwd)/$(basename "${bin}")" >> "${GITHUB_ENV}"
+
+      - name: Smoke test the built plugin
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          EXT: ${{ matrix.ext }}
+          ARTIFACTS_DIR: ${{ github.workspace }}/artifacts
+        run: ./scripts/smoke-test.sh
+
   release:
     name: Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs:
+      - build
+      - smoke
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
