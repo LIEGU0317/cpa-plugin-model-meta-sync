@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-labelledby="mms-title mms-desc">
+  <title id="mms-title">model-meta-sync</title>
+  <desc id="mms-desc">White clockwise sync ring around three stacked metadata lines on a rounded indigo-to-cyan badge.</desc>
+  <defs>
+    <linearGradient id="badge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4338CA"/>
+      <stop offset="0.5" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#badge)"/>
+  <path d="M102.4 228.9A156 156 0 0 1 393.7 182.8 M409.6 283.1A156 156 0 0 1 118.3 329.2" fill="none" stroke="#FFFFFF" stroke-width="36" stroke-linecap="round"/>
+  <path d="M415.3 223.4L429.4 179.6L371.2 210.6Z M96.7 288.6L82.6 332.4L140.8 301.4Z" fill="#FFFFFF"/>
+  <rect x="190.0" y="184" width="132" height="28" rx="14" fill="#FFFFFF"/>
+  <rect x="207.0" y="242" width="98" height="28" rx="14" fill="#FFFFFF"/>
+  <rect x="196.0" y="300" width="120" height="28" rx="14" fill="#FFFFFF"/>
+</svg>

@@ -6,6 +6,9 @@ build/
 *.h
 plugin/cpa-model-meta-sync
 
+# Store-shaped release packages (<id>_<version>_<goos>_<goarch>.zip + checksums.txt)
+dist/
+
 # Published release artifacts are tracked: prebuilt plugin + checksum per platform
 !plugins/
 !plugins/**/*.so

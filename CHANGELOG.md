@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.3.1
+
+- **Plugin-store layout.** Releases now ship `<id>_<version>_<goos>_<goarch>.zip` with
+  `model-meta-sync.<ext>` at the archive root plus `checksums.txt` - the only shape CPA's store
+  installer accepts (a bare `.so` asset is refused). `make dist` writes the archive, `make checksums`
+  covers every archive in `dist/`, `make verify-dist` re-checks the layout, and
+  `.github/workflows/build.yml` builds linux/amd64, linux/arm64, darwin/amd64, darwin/arm64 and
+  windows/amd64 from a `v*` tag and publishes the assets.
+- **Metadata.** The plugin registers `Logo` (`assets/logo.png`), so the store card and the management
+  plugin list show the icon. `ConfigFields` were refreshed: `models_paths` is advertised, every field
+  carries the default `parseConfig` applies, and `upstream_models_path` is marked deprecated.
+  `plugin/metadata_test.go` keeps the advertised surface identical to the parsed one.
+- **`sync_on_start` really defaults to true.** An omitted key used to parse as `false` while the docs
+  promised the CPAMC "apply models, get metadata in the same reload" behaviour. An explicit `false`
+  still disables the startup run.
+- **Version stamping.** `pluginVersion` is a variable filled from the release tag
+  (`-ldflags "-X main.pluginVersion=..."`), and `make version-check` fails when the tag, the
+  Makefile `VERSION` and the source default disagree.
+- `store/` documents the store entry and the release contract; `scripts/render-icon.sh` regenerates
+  the PNG icon set from `assets/icon.svg`; `plugin/README.md` no longer duplicates (and contradict)
+  the root README.
+
 ## 0.3.0
 
 - Endpoint discovery now mirrors CPA's "fetch from endpoint": try `/v1/models`, then `/models`,

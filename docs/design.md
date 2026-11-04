@@ -5,12 +5,15 @@
 > `max-context-length` / `input-modalities` / `output-modalities` / `thinking.levels`。
 
 - 插件 ID：`model-meta-sync`
-- 版本：0.3.0（ABI 1 / schema 8，CPA v8）
-- 产物：`model-meta-sync-v0.2.0.so`（linux/amd64 生产；linux/arm64 沙箱）
-- 源码：本目录 `plugin/`
+- 版本：0.3.1（ABI 1 / schema 8，CPA v8）
+- 产物：`dist/model-meta-sync_<version>_<goos>_<goarch>.zip`（商店标准包，内含 `<id>.<ext>`）
+  与 `plugins/linux/amd64/model-meta-sync-v<version>.so`（仓库内便利产物，linux/amd64）
+- 源码：`plugin/`
 - 0.2.0 变更：取消供应商白名单（默认同步配置内全部启用的 provider）；供应商只按名称命中；
   模型名匹配改为 dsh-model-metadata 式回退（裸名 / 去分隔符 / 目录后缀 / 部署限定词，歧义即拒绝）；
   单个上游失败隔离，不再整批中止；报告与日志不再输出 `base_url`/主机/IP。
+- 0.3.1 变更：按 CPA 插件商店标准打包与登记（zip 根目录单库 + `checksums.txt` + `registry-entry.json`）；
+  注册 `Logo` 与完整 `ConfigFields`；`sync_on_start` 缺省值修正为 true；版本号由 tag 经 ldflags 注入。
 
 ## 1. 结论先行
 
@@ -158,8 +161,8 @@
 4. 插件安装/升级需要重启一次 CPA（插件 host 只在启动时扫描 `.so`）；数据同步本身不需要重启。
 5. 上游 UA 会影响 Magpie 返回形状（claude-desktop UA 返回另一套目录）；插件固定用中性 UA。
 6. 0.2.0 起锚点/别名守卫按 provider 生效：命中者被跳过并在 `warnings[]` 写出其名称，其余照常同步。
-7. 上游模型列表不在 `<base-url>/v1/models` 的网关（如根路径为 `/v2`）暂无逐 provider 路径覆盖，
-   会作为 upstream error 跳过。
+7. 模型目录只探测 `<base-url>/v1/models` 与 `<base-url>/models`；其它路径需在 `models_paths`
+   里显式登记，未登记的 provider 作为 upstream error 跳过。
 
 ## 6.1 独立验收
 
@@ -170,3 +173,20 @@
 
 见 `runbook/deploy.md`。回滚：停用 `plugins.configs.model-meta-sync` 并删除 `.so`，或直接恢复
 `config.yaml.bak-<ts>` 后重启。
+
+## 8. 插件标准合规（0.3.1）
+
+CPA 插件标准由三部分组成，缺一项都会在商店/管理面表现为「不标准」：
+
+| 面向 | 标准要求 | 本项目落地 |
+|---|---|---|
+| 注册元数据 | `Metadata.Name` / `Version` / `Author` / `GitHubRepository` 必填；`Logo` 为展示图标；`ConfigFields` 供管理端生成配置表单 | `plugin/main.go` 的 `metadata()`；`Logo` 指向 `assets/logo.png`；14 个字段含类型、默认值、枚举与说明；`plugin/metadata_test.go` 校验「已解析的配置键 == 已登记字段」且默认值与 `parseConfig` 一致 |
+| 发布产物 | release tag 为 `v<version>`（点分数字）；资产 `<id>_<version>_<goos>_<goarch>.zip`，zip 根目录仅一个动态库；同名 release 附 `checksums.txt`（sha256sum 格式） | `make dist` / `make checksums` / `make verify-dist`（打包工具 `plugin/cmd/zipdist`，只用标准库，跨平台一致）；`.github/workflows/build.yml` 在 tag 上构建 linux/amd64、linux/arm64、darwin/amd64、darwin/arm64、windows/amd64 并发布 |
+| 商店登记 | `registry.json` 条目：`id`/`name`/`description`/`author`/`repository` 必填，`logo`/`homepage`/`license`/`tags` 可选；`id` 需匹配插件 ID 规则 | `store/registry-entry.json` + `store/README.md`（含用 CPA 自带校验器本地复核的方法） |
+
+校验证据：0.3.1 的 zip 与条目已用 CPA v8.0.47 源码中的 `internal/pluginstore`（`ParseRegistry`、
+`InstallArchive`）实测通过——条目被接受，zip 被安装为
+`plugins/linux/arm64/model-meta-sync-v0.3.1.so`；并在真实 CPA v8.0.47 沙箱中确认
+`GET /v0/management/plugins` 返回 `logo` 与 14 条 `config_fields`，启动 dry-run 只报告不落盘，
+`POST /v0/management/model-meta-sync/sync` 写入后触发 `config successfully reloaded`，二次同步
+`changed_fields=0`。

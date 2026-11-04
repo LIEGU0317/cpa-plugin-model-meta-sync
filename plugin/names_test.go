@@ -130,6 +130,31 @@ func TestParseConfigExplicitOverwriteFields(t *testing.T) {
 	}
 }
 
+// sync_on_start is documented as on by default (applying models in the CPAMC
+// editor enriches them in the same reload), so an omitted key must not disable
+// it while an explicit false still must.
+func TestParseConfigSyncOnStartDefault(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+		want bool
+	}{
+		{name: "absent", raw: "mode: missing\n", want: true},
+		{name: "empty config", raw: "", want: true},
+		{name: "explicit true", raw: "sync_on_start: true\n", want: true},
+		{name: "explicit false", raw: "sync_on_start: false\n", want: false},
+	}
+	for _, tc := range cases {
+		cfg, err := parseConfig([]byte(tc.raw))
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if cfg.SyncOnStart != tc.want {
+			t.Fatalf("%s: SyncOnStart = %v, want %v", tc.name, cfg.SyncOnStart, tc.want)
+		}
+	}
+}
+
 func TestConfigPathFromArgs(t *testing.T) {
 	cases := []struct {
 		args []string

@@ -58,7 +58,11 @@ type Config struct {
 }
 
 func parseConfig(raw []byte) (Config, error) {
-	cfg := Config{}
+	// sync_on_start defaults to true: the documented contract is that applying
+	// models in the CPAMC editor enriches them in the same config reload. A
+	// struct decoded over this zero value keeps true when the key is absent and
+	// takes the explicit value when it is present.
+	cfg := Config{SyncOnStart: true}
 	if len(strings.TrimSpace(string(raw))) > 0 {
 		if err := yaml.Unmarshal(raw, &cfg); err != nil {
 			return Config{}, fmt.Errorf("parse plugin config: %w", err)

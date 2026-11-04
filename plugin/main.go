@@ -14,12 +14,23 @@ import (
 )
 
 const (
-	pluginName    = "model-meta-sync"
-	pluginVersion = "0.3.0"
-	pluginAuthor  = "LIEGU0317"
-	pluginRepo    = "https://github.com/LIEGU0317/cpa-plugin-model-meta-sync"
-	routePrefix   = "/model-meta-sync"
+	pluginName   = "model-meta-sync"
+	pluginAuthor = "LIEGU0317"
+	pluginRepo   = "https://github.com/LIEGU0317/cpa-plugin-model-meta-sync"
+	// pluginLogo is the display asset CPA management clients render next to the
+	// plugin. It is served from the repository so the plugin store and the
+	// management UI show the same icon.
+	pluginLogo  = "https://raw.githubusercontent.com/LIEGU0317/cpa-plugin-model-meta-sync/main/assets/logo.png"
+	routePrefix = "/model-meta-sync"
 )
+
+// pluginVersion is the metadata version CPA reports and the store compares
+// against the release tag. Release builds stamp it from the tag:
+//
+//	-ldflags "-X main.pluginVersion=0.3.1"
+//
+// The default keeps a plain `go build` working during development.
+var pluginVersion = "0.3.1"
 
 type pluginState struct {
 	mu         sync.Mutex
@@ -53,26 +64,47 @@ func buildPlugin(configYAML []byte, pluginDir string) (*pluginState, error) {
 	return p, nil
 }
 
+// metadata is the plugin descriptor CPA registers and the plugin store
+// renders. Every value here is part of the plugin standard: the four identity
+// fields are mandatory, Logo is the display asset and ConfigFields lets the
+// management UI render the plugin-owned configuration form without the plugin
+// shipping its own UI.
 func (p *pluginState) metadata() pluginapi.Metadata {
 	return pluginapi.Metadata{
 		Name:             pluginName,
 		Version:          pluginVersion,
 		Author:           pluginAuthor,
 		GitHubRepository: pluginRepo,
+		Logo:             pluginLogo,
 		ConfigFields: []pluginapi.ConfigField{
-			{Name: "config_path", Type: pluginapi.ConfigFieldTypeString, Description: "Optional path to the CPA config.yaml; omitted = the host's -config flag or ./config.yaml."},
-			{Name: "providers", Type: pluginapi.ConfigFieldTypeArray, Description: "Optional provider-name filter; empty syncs every enabled provider."},
-			{Name: "include_disabled", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Also sync providers marked disabled in the CPA config."},
-			{Name: "mode", Type: pluginapi.ConfigFieldTypeEnum, EnumValues: []string{"missing", "always"}, Description: "missing fills empty fields only; always recomputes configured fields."},
-			{Name: "fields", Type: pluginapi.ConfigFieldTypeArray, Description: "Subset of display-name, max-context-length, input-modalities, output-modalities, thinking."},
-			{Name: "timeout_seconds", Type: pluginapi.ConfigFieldTypeInteger, Description: "Upstream model-list request timeout in seconds."},
-			{Name: "sync_on_start", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Run one sync shortly after the plugin loads."},
-			{Name: "dry_run_on_start", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Make the startup sync a preview: report only, write nothing."},
-			{Name: "interval_minutes", Type: pluginapi.ConfigFieldTypeInteger, Description: "Repeat the sync every N minutes (0 disables)."},
-			{Name: "overwrite_fields", Type: pluginapi.ConfigFieldTypeArray, Description: "Fields that stay authoritative upstream even in missing mode."},
-			{Name: "backup_keep", Type: pluginapi.ConfigFieldTypeInteger, Description: "Timestamped config backups to retain (deploy backups are never pruned)."},
-			{Name: "upstream_models_path", Type: pluginapi.ConfigFieldTypeString, Description: "Model list path appended to the provider base URL (default /v1/models)."},
-			{Name: "api_key", Type: pluginapi.ConfigFieldTypeString, Description: "Optional upstream key override; defaults to the provider's first configured key."},
+			{Name: "config_path", Type: pluginapi.ConfigFieldTypeString,
+				Description: "Optional path to the CPA config.yaml; omitted = the host's -config flag or ./config.yaml."},
+			{Name: "providers", Type: pluginapi.ConfigFieldTypeArray, Default: []string{},
+				Description: "Optional provider-name filter; empty syncs every enabled provider."},
+			{Name: "include_disabled", Type: pluginapi.ConfigFieldTypeBoolean, Default: false,
+				Description: "Also sync providers marked disabled in the CPA config."},
+			{Name: "mode", Type: pluginapi.ConfigFieldTypeEnum, EnumValues: []string{"missing", "always"}, Default: "missing",
+				Description: "missing fills empty fields only; always recomputes the configured fields."},
+			{Name: "fields", Type: pluginapi.ConfigFieldTypeArray, Default: allFields,
+				Description: "Subset of display-name, max-context-length, input-modalities, output-modalities, thinking."},
+			{Name: "overwrite_fields", Type: pluginapi.ConfigFieldTypeArray, Default: []string{},
+				Description: "Fields that stay authoritative upstream even in missing mode; empty means never overwrite."},
+			{Name: "timeout_seconds", Type: pluginapi.ConfigFieldTypeInteger, Default: defaultTimeoutSec,
+				Description: "Upstream model-list request timeout in seconds."},
+			{Name: "backup_keep", Type: pluginapi.ConfigFieldTypeInteger, Default: defaultBackupKeep,
+				Description: "Timestamped config backups to retain (deploy backups are never pruned)."},
+			{Name: "sync_on_start", Type: pluginapi.ConfigFieldTypeBoolean, Default: true,
+				Description: "Run one sync shortly after the plugin loads."},
+			{Name: "dry_run_on_start", Type: pluginapi.ConfigFieldTypeBoolean, Default: false,
+				Description: "Make the startup sync a preview: report only, write nothing."},
+			{Name: "interval_minutes", Type: pluginapi.ConfigFieldTypeInteger, Default: 0,
+				Description: "Repeat the sync every N minutes (0 disables)."},
+			{Name: "models_paths", Type: pluginapi.ConfigFieldTypeObject, Default: map[string]string{},
+				Description: "Per-provider model-list path override, e.g. {Spark: /models}; omitted = automatic /v1/models then /models."},
+			{Name: "api_key", Type: pluginapi.ConfigFieldTypeString,
+				Description: "Optional upstream key override; defaults to the provider's first configured key."},
+			{Name: "upstream_models_path", Type: pluginapi.ConfigFieldTypeString, Default: defaultUpstreamDir,
+				Description: "Deprecated: global model-list path; prefer models_paths. Defaults to /v1/models."},
 		},
 	}
 }

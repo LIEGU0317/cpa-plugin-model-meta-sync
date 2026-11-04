@@ -1,0 +1,14 @@
+{
+  "id": "model-meta-sync",
+  "name": "Model Meta Sync",
+  "description": "Fills per-provider model metadata (display name, context length, input/output modalities, thinking levels) from each OpenAI-compatible gateway's own /v1/models into the CPA provider config.",
+  "author": "LIEGU0317",
+  "repository": "https://github.com/LIEGU0317/cpa-plugin-model-meta-sync",
+  "logo": "https://raw.githubusercontent.com/LIEGU0317/cpa-plugin-model-meta-sync/main/assets/logo.png",
+  "homepage": "https://github.com/LIEGU0317/cpa-plugin-model-meta-sync",
+  "license": "MIT",
+  "tags": [
+    "Management",
+    "Models"
+  ]
+}
