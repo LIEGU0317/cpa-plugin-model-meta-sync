@@ -214,8 +214,11 @@ jobs:
             --pattern "CLIProxyAPI_${version}_${{ matrix.cpa_os }}_${{ matrix.cpa_arch }}.zip" \
             --dir cpa || true
           cd cpa
-          for archive in *.tar.gz; do [[ -e "${archive}" ]] && tar -xzf "${archive}"; done
-          for archive in *.zip; do [[ -e "${archive}" ]] && unzip -o -q "${archive}"; done
+          # nullglob keeps an unmatched pattern from ending the step under set -e
+          shopt -s nullglob
+          for archive in *.tar.gz; do tar -xzf "${archive}"; done
+          for archive in *.zip; do unzip -o -q "${archive}"; done
+          shopt -u nullglob
           bin="$(find . -maxdepth 3 -type f -name '${{ matrix.cpa_bin }}' | head -1)"
           if [[ -z "${bin}" ]]; then
             echo "CLIProxyAPI ${tag} has no ${{ matrix.cpa_os }}/${{ matrix.cpa_arch }} binary" >&2
