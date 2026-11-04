@@ -1,0 +1,74 @@
+name: Probe darwin amd64 plugin loading
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-15-intel
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Fetch CLIProxyAPI (darwin/amd64)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$(gh release view --repo router-for-me/CLIProxyAPI --json tagName -q .tagName)"
+          version="${tag#v}"
+          mkdir -p cpa
+          gh release download "${tag}" --repo router-for-me/CLIProxyAPI \
+            --pattern "CLIProxyAPI_${version}_darwin_amd64.tar.gz" --dir cpa
+          tar -xzf cpa/*.tar.gz -C cpa
+          chmod +x cpa/cli-proxy-api
+          echo "host: $(cpa/cli-proxy-api --version 2>/dev/null || true)"
+
+      - name: Fetch an official plugin (antigravity-priority, darwin/amd64)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$(gh release view --repo ygq-future/antigravity-priority --json tagName -q .tagName)"
+          version="${tag#v}"
+          mkdir -p probe/plugins/darwin/amd64
+          gh release download "${tag}" --repo ygq-future/antigravity-priority \
+            --pattern "antigravity-priority_${version}_darwin_amd64.zip" --dir probe
+          unzip -o -q probe/*.zip -d probe/plugins/darwin/amd64
+          mv probe/plugins/darwin/amd64/antigravity-priority.dylib \
+             "probe/plugins/darwin/amd64/antigravity-priority-v${version}.dylib"
+          ls -la probe/plugins/darwin/amd64
+
+      - name: Run the host with that plugin
+        run: |
+          set -uo pipefail
+          cat > probe/config.yaml <<'YAML'
+          port: 28555
+          auth-dir: ./auths
+          remote-management:
+            allow-remote: false
+            secret-key: probe-key
+          plugins:
+            enabled: true
+            dir: plugins
+            configs:
+              antigravity-priority:
+                enabled: true
+          YAML
+          cd probe
+          ../cpa/cli-proxy-api -config config.yaml > host.log 2>&1 &
+          pid=$!
+          for _ in $(seq 1 25); do
+            if curl -fsS -H "X-Management-Key: probe-key" http://127.0.0.1:28555/v0/management/plugins -o plugins.json 2>/dev/null; then break; fi
+            sleep 1
+          done
+          if kill -0 "$pid" 2>/dev/null; then echo "HOST_STILL_RUNNING"; else echo "HOST_DIED"; fi
+          echo "--- host.log head ---"
+          head -25 host.log || true
+          echo "--- fatal ---"
+          grep -m 5 -E "fatal error|unexpected return pc|SIGSEGV|panic:" host.log || true
+          if [[ -f plugins.json ]]; then python3 -c "import json;d=json.load(open('plugins.json'));print([(p['id'],p['registered']) for p in d['plugins']])"; fi
+          kill "$pid" 2>/dev/null || true
