@@ -53,6 +53,23 @@ func TestLookupCatalogSuffixDecoration(t *testing.T) {
 	}
 }
 
+// The catalog may decorate an id the config leaves bare, never the reverse: a
+// configured "-preview" is its own endpoint and must not inherit the metadata
+// of the plain upstream model.
+func TestLookupSuffixOnConfiguredNameDoesNotMatchPlainUpstream(t *testing.T) {
+	index := buildUpstreamIndex([]upstreamModel{model("gpt-5", "GPT-5")})
+	for _, name := range []string{"gpt-5-preview", "GPT_5_Latest", "gpt-5-free"} {
+		if got, ok := index.lookup(name, ""); ok {
+			t.Fatalf("configured %q must not match plain upstream %q", name, got.ID)
+		}
+	}
+	// The intended direction keeps working.
+	index = buildUpstreamIndex([]upstreamModel{model("glm-4-flash-free", "Free")})
+	if got, ok := index.lookup("GLM-4-Flash", ""); !ok || got.ID != "glm-4-flash-free" {
+		t.Fatalf("bare configured name must match a decorated catalog id: %+v %v", got, ok)
+	}
+}
+
 func TestLookupDeploymentQualifier(t *testing.T) {
 	index := buildUpstreamIndex([]upstreamModel{model("deepseek-v4.1-flash", "plain")})
 	got, ok := index.lookup("deepseek-v4.1-flash-self", "")

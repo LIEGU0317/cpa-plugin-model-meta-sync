@@ -142,8 +142,12 @@ func buildUpstreamIndex(models []upstreamModel) *upstreamIndex {
 			addExact(index, bare, id, model)
 			addExact(index, strings.ToLower(bare), id, model)
 		}
-		for _, key := range normalizedKeys(bareName(id)) {
-			addFolded(index, key, id, model)
+		// Only the plain folded spelling is indexed. Suffix variants are added
+		// on the lookup side, which keeps the relaxation one-way: a configured
+		// name may lack a catalog decoration, but a configured "-preview" never
+		// resolves to the plain upstream id.
+		if norm := normalizeName(bareName(id)); len(norm) >= minNormalizedName {
+			addFolded(index, norm, id, model)
 		}
 	}
 	return index
