@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -303,7 +304,7 @@ func fetchUpstream(ctx context.Context, cfg Config, baseURL, apiKey, modelsPath 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			return nil, &upstreamStatusError{
 				Code: resp.StatusCode,
-				Err:  fmt.Errorf("GET %s: HTTP %d: %s", redactURL(next), resp.StatusCode, snippet(body)),
+				Err:  fmt.Errorf("GET %s: HTTP %d: %s", redactURL(next), resp.StatusCode, redactSnippet(body, apiKey)),
 			}
 		}
 		var list upstreamList
@@ -353,6 +354,24 @@ func snippet(b []byte) string {
 	}
 	return s
 }
+
+// redactSnippet shortens an upstream error body and removes credentials from
+// it. Error text reaches the journal and /status, and gateways echo the key
+// they rejected.
+func redactSnippet(b []byte, secrets ...string) string {
+	s := snippet(b)
+	for _, secret := range secrets {
+		if len(secret) < 8 {
+			continue
+		}
+		s = strings.ReplaceAll(s, secret, "***")
+	}
+	// Long tokens that are not the key we sent: hex strings and sk- style keys.
+	s = tokenPattern.ReplaceAllString(s, "***")
+	return s
+}
+
+var tokenPattern = regexp.MustCompile(`\b(?:sk-|rk-|key-|Bearer )?[A-Za-z0-9_\-]{24,}\b`)
 
 // ---------------------------------------------------------------------------
 // yaml helpers
@@ -826,10 +845,16 @@ func (p *pluginState) runSync(ctx context.Context, opts syncOptions) (*RunReport
 	newRaw, errEncode := doc.encode()
 	if errEncode != nil {
 		report.Error = errEncode.Error()
+		report.OK = false
+		report.DurationMS = time.Since(started).Milliseconds()
+		p.storeReport(report)
 		return report, errEncode
 	}
 	if errValidate := validateSemanticDiff(doc.raw, newRaw, cfg, selectedIdx); errValidate != nil {
 		report.Error = errValidate.Error()
+		report.OK = false
+		report.DurationMS = time.Since(started).Milliseconds()
+		p.storeReport(report)
 		return report, errValidate
 	}
 	sum := sha256.Sum256(newRaw)
@@ -847,12 +872,15 @@ func (p *pluginState) runSync(ctx context.Context, opts syncOptions) (*RunReport
 	if errWrite != nil {
 		report.OK = false
 		report.Error = errWrite.Error()
+		report.DurationMS = time.Since(started).Milliseconds()
+		p.storeReport(report)
 		return report, errWrite
 	}
 	report.Written = true
 	report.Backup = backup
 	report.DurationMS = time.Since(started).Milliseconds()
 	p.storeReport(report)
+	noteOwnWrite(report.ConfigHashAfter)
 	return report, nil
 }
 
@@ -1161,7 +1189,15 @@ func writeConfigAtomic(cfg Config, doc *configDocument, newRaw []byte) (string, 
 	if hex.EncodeToString(sum[:]) != doc.hash {
 		return "", errors.New("config changed while syncing; retry")
 	}
-	backup := fmt.Sprintf("%s.bak-modelmetasync-%s", cfg.ConfigPath, time.Now().Format("20060102-150405"))
+	backup := fmt.Sprintf("%s.bak-modelmetasync-%s", cfg.ConfigPath, time.Now().Format("20060102-150405.000000"))
+	// Two writes in the same microsecond must not share a name: the second would
+	// overwrite the first and the original file would be lost.
+	for n := 1; ; n++ {
+		if _, errStat := os.Stat(backup); errors.Is(errStat, os.ErrNotExist) {
+			break
+		}
+		backup = fmt.Sprintf("%s.bak-modelmetasync-%s-%d", cfg.ConfigPath, time.Now().Format("20060102-150405.000000"), n)
+	}
 	if errCopy := os.WriteFile(backup, current, doc.mode); errCopy != nil {
 		return "", fmt.Errorf("write backup: %w", errCopy)
 	}
