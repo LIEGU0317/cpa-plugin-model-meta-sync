@@ -86,7 +86,7 @@ func (f *scopeFixture) plugin() *pluginState {
 	return &pluginState{cfg: Config{
 		ConfigPath:     f.path,
 		Mode:           "missing",
-		Fields:         normalizeFields(nil),
+		Fields:         append([]string(nil), allFields...),
 		TimeoutSeconds: 5,
 		BackupKeep:     3,
 	}, stop: make(chan struct{})}
@@ -232,7 +232,7 @@ api-keys:
 		t.Fatal(err)
 	}
 	before, _ := os.ReadFile(path)
-	p := &pluginState{cfg: Config{ConfigPath: path, Mode: "missing", Fields: normalizeFields(nil), TimeoutSeconds: 5, BackupKeep: 3}, stop: make(chan struct{})}
+	p := &pluginState{cfg: Config{ConfigPath: path, Mode: "missing", Fields: append([]string(nil), allFields...), TimeoutSeconds: 5, BackupKeep: 3}, stop: make(chan struct{})}
 	report, err := p.runSync(context.Background(), syncOptions{})
 	if err == nil || report.OK {
 		t.Fatalf("expected whole-run failure, got %+v err=%v", report, err)

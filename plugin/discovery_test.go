@@ -20,7 +20,7 @@ func discoveryPlugin(t *testing.T, config string) (*pluginState, string) {
 	return &pluginState{cfg: Config{
 		ConfigPath:     path,
 		Mode:           "missing",
-		Fields:         normalizeFields(nil),
+		Fields:         append([]string(nil), allFields...),
 		TimeoutSeconds: 5,
 		BackupKeep:     3,
 	}, stop: make(chan struct{})}, path
