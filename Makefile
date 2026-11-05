@@ -1,5 +1,5 @@
 PLUGIN_NAME ?= model-meta-sync
-VERSION ?= 0.3.1
+VERSION ?= 0.3.2
 DIST_DIR ?= plugins
 RELEASE_DIR ?= dist
 GOOS ?= $(shell go env GOOS)

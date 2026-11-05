@@ -24,7 +24,7 @@ longer have to be typed by hand.</p>
   style does not have to be declared anywhere.
 - Packaging: plugin-store layout - `<id>_<version>_<goos>_<goarch>.zip` with the library at the zip
   root plus `checksums.txt` (see [Releases](#releases)).
-- Current release: **0.3.1**.
+- Current release: **0.3.2**.
 
 ## Why a plugin
 

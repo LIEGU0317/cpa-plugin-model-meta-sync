@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.3.2
+
+Review fixes. Each change has a regression test that fails on 0.3.1.
+
+- **Catalog-suffix folding is one-way.** 0.3.1 indexed suffix variants of every upstream id and
+  also tried them on lookup, so a configured `gpt-5-preview` resolved to the plain upstream `gpt-5`
+  and inherited its metadata. A configured bare name still matches a decorated catalog id
+  (`glm-4-flash` -> `glm-4-flash-free`).
+- **`name` wins over `alias`.** In CPA `name` is the upstream id the request goes to. 0.3.1 tried an
+  exact `alias` before the name's relaxed spellings, so `name: deepseek-v4-flash, alias: deepseek-chat`
+  received deepseek-chat's metadata. The alias is now used only when no name is configured.
+- **Unknown field names are an error.** A misspelt entry in `fields` or `overwrite_fields` (for
+  example `thinking.levels`) used to widen the list to every field - overwrite-everything for
+  `overwrite_fields`. It now fails registration and names the offending entries.
+- **Shutdown stops the background loop.** A Go `c-shared` library is never unloaded; with
+  `interval_minutes > 0` a retired version kept rewriting `config.yaml`. Shutdown and every
+  re-registration now stop the loop, cancel a sync in flight and wait for it.
+- **Key overrides are scoped to one provider.** New `api_keys: {<provider>: <key>}`. The legacy
+  `api_key` is accepted only with exactly one `providers` entry; an unscoped `api_key`, which 0.3.1
+  sent to every gateway, is now rejected. `/status` and `/config` redact `api_keys`.
+- CI runs the unit tests under the race detector.
+
+**Upgrade note:** a config with an unscoped `api_key` or a misspelt field name stops loading; fix the
+config before upgrading.
+
 ## 0.3.1
 
 - **Plugin-store layout.** Releases now ship `<id>_<version>_<goos>_<goarch>.zip` with

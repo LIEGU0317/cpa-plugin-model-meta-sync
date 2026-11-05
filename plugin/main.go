@@ -27,10 +27,10 @@ const (
 // pluginVersion is the metadata version CPA reports and the store compares
 // against the release tag. Release builds stamp it from the tag:
 //
-//	-ldflags "-X main.pluginVersion=0.3.1"
+//	-ldflags "-X main.pluginVersion=0.3.2"
 //
 // The default keeps a plain `go build` working during development.
-var pluginVersion = "0.3.1"
+var pluginVersion = "0.3.2"
 
 type pluginState struct {
 	mu         sync.Mutex

@@ -5,7 +5,7 @@
 > `max-context-length` / `input-modalities` / `output-modalities` / `thinking.levels`。
 
 - 插件 ID：`model-meta-sync`
-- 版本：0.3.1（ABI 1 / schema 8，CPA v8）
+- 版本：0.3.2（ABI 1 / schema 8，CPA v8）
 - 产物：`dist/model-meta-sync_<version>_<goos>_<goarch>.zip`（商店标准包，内含 `<id>.<ext>`）
   与 `plugins/linux/amd64/model-meta-sync-v<version>.so`（仓库内便利产物，linux/amd64）
 - 源码：`plugin/`
@@ -14,6 +14,9 @@
   单个上游失败隔离，不再整批中止；报告与日志不再输出 `base_url`/主机/IP。
 - 0.3.1 变更：按 CPA 插件商店标准打包与登记（zip 根目录单库 + `checksums.txt` + `registry-entry.json`）；
   注册 `Logo` 与完整 `ConfigFields`；`sync_on_start` 缺省值修正为 true；版本号由 tag 经 ldflags 注入。
+- 0.3.2 变更（评审修复）：目录后缀折叠改为单向；模型以 `name`（上游 id）为准、`alias` 仅在无 name 时使用；
+  `fields`/`overwrite_fields` 未知字段名报错；插件关闭/重新注册时停止并等待后台循环、取消进行中的同步；
+  新增按供应商的 `api_keys`，未限定供应商的 `api_key` 拒绝加载；CI 增加 race 检测。
 
 ## 1. 结论先行
 
