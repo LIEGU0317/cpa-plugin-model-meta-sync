@@ -144,6 +144,7 @@ func ModelMetaSyncPluginShutdown() {
 	abiState.host = nil
 	abiState.Unlock()
 	abiState.inFlight.Wait()
+	stopBackground()
 }
 
 func handleABIMethod(ctx context.Context, method string, request []byte) ([]byte, error) {
