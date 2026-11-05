@@ -70,6 +70,27 @@ func TestLookupSuffixOnConfiguredNameDoesNotMatchPlainUpstream(t *testing.T) {
 	}
 }
 
+// In CPA `name` is the upstream id the request is sent to and `alias` is the
+// client-facing name. Metadata must describe the upstream model, so `name`
+// resolves through every relaxation before `alias` is considered, and an alias
+// is only used when no name is configured.
+func TestLookupNameWinsOverAlias(t *testing.T) {
+	index := buildUpstreamIndex([]upstreamModel{
+		model("deepseek-chat", "Chat"),
+		model("DeepSeek_V4_Flash", "Flash"),
+	})
+	if got, ok := index.lookup("deepseek-v4-flash", "deepseek-chat"); !ok || got.ID != "DeepSeek_V4_Flash" {
+		t.Fatalf("folded name must beat exact alias: %+v %v", got, ok)
+	}
+	index = buildUpstreamIndex([]upstreamModel{model("gpt-4o", "GPT-4o")})
+	if got, ok := index.lookup("my-private-finetune", "gpt-4o"); ok {
+		t.Fatalf("an alias must not borrow another upstream model's metadata, got %q", got.ID)
+	}
+	if got, ok := index.lookup("", "gpt-4o"); !ok || got.ID != "gpt-4o" {
+		t.Fatalf("alias is the identity when name is empty: %+v %v", got, ok)
+	}
+}
+
 func TestLookupDeploymentQualifier(t *testing.T) {
 	index := buildUpstreamIndex([]upstreamModel{model("deepseek-v4.1-flash", "plain")})
 	got, ok := index.lookup("deepseek-v4.1-flash-self", "")
