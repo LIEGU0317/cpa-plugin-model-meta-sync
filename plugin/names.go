@@ -189,28 +189,25 @@ func addFolded(index *upstreamIndex, key, id string, model upstreamModel) {
 	index.folded[key] = model
 }
 
-// lookup resolves a configured model name (and optional alias) against the
-// provider's upstream list. Exact spellings win; the folded spellings are only
-// consulted when no exact form matched, and a folded spelling shared by two
-// upstream ids never matches.
+// lookup resolves a configured model against the provider's upstream list.
+// The identity is the configured name, which in CPA is the upstream id the
+// request is sent to; the alias is only the client-facing name and is used
+// solely when no name is configured. Exact spellings win; the folded spellings
+// are only consulted when no exact form matched, and a folded spelling shared
+// by two upstream ids never matches.
 func (index *upstreamIndex) lookup(name, alias string) (upstreamModel, bool) {
-	ident := name
+	ident := strings.TrimSpace(name)
 	if ident == "" {
-		ident = alias
+		ident = strings.TrimSpace(alias)
 	}
 	if ident == "" {
 		return upstreamModel{}, false
 	}
-	for _, candidate := range []string{name, alias, ident} {
-		if candidate == "" {
-			continue
-		}
-		if model, ok := index.exact[candidate]; ok {
-			return model, true
-		}
-		if model, ok := index.exact[strings.ToLower(candidate)]; ok {
-			return model, true
-		}
+	if model, ok := index.exact[ident]; ok {
+		return model, true
+	}
+	if model, ok := index.exact[strings.ToLower(ident)]; ok {
+		return model, true
 	}
 	bare := bareName(ident)
 	for _, candidate := range []string{bare, strings.ToLower(bare)} {
