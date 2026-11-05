@@ -43,10 +43,30 @@ type pluginState struct {
 	stop       chan struct{}
 }
 
+// startupSyncDelay lets the host finish registering before the first sync.
+var startupSyncDelay = 3 * time.Second
+
+// activeBackground owns the single background loop. The host re-registers the
+// plugin on every config reload and a c-shared library is never unloaded, so
+// the previous loop must be stopped - and waited for - before another starts
+// or the plugin is shut down.
 var activeBackground = struct {
 	sync.Mutex
 	stop chan struct{}
+	done sync.WaitGroup
 }{}
+
+// stopBackground stops the running loop, cancels a sync it has in flight and
+// waits for it to return.
+func stopBackground() {
+	activeBackground.Lock()
+	if activeBackground.stop != nil {
+		close(activeBackground.stop)
+		activeBackground.stop = nil
+	}
+	activeBackground.Unlock()
+	activeBackground.done.Wait()
+}
 
 func buildPlugin(configYAML []byte, pluginDir string) (*pluginState, error) {
 	cfg, errParse := parseConfig(configYAML)
@@ -241,27 +261,37 @@ func jsonResponse(status int, payload any) (pluginapi.ManagementResponse, error)
 // ---------------------------------------------------------------------------
 
 func (p *pluginState) startBackground() {
-	activeBackground.Lock()
-	if activeBackground.stop != nil {
-		close(activeBackground.stop)
-		activeBackground.stop = nil
-	}
-	stop := make(chan struct{})
-	activeBackground.stop = stop
-	activeBackground.Unlock()
+	stopBackground()
 
 	interval := time.Duration(p.cfg.IntervalMinutes) * time.Minute
 	if !p.cfg.SyncOnStart && interval <= 0 {
 		return
 	}
+	stop := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	activeBackground.Lock()
+	activeBackground.stop = stop
+	activeBackground.done.Add(1)
+	activeBackground.Unlock()
+
 	go func() {
-		if p.cfg.SyncOnStart {
+		defer activeBackground.done.Done()
+		defer cancel()
+		// Closing stop cancels a sync that is already talking to an upstream.
+		go func() {
 			select {
 			case <-stop:
-				return
-			case <-time.After(3 * time.Second):
+				cancel()
+			case <-ctx.Done():
 			}
-			p.backgroundSync(p.cfg.DryRunOnStart)
+		}()
+		if p.cfg.SyncOnStart {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(startupSyncDelay):
+			}
+			p.backgroundSync(ctx, p.cfg.DryRunOnStart)
 		}
 		if interval <= 0 {
 			return
@@ -270,21 +300,25 @@ func (p *pluginState) startBackground() {
 		defer ticker.Stop()
 		for {
 			select {
-			case <-stop:
+			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				p.backgroundSync(false)
+				p.backgroundSync(ctx, false)
 			}
 		}
 	}()
 }
 
-func (p *pluginState) backgroundSync(dryRun bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+func (p *pluginState) backgroundSync(parent context.Context, dryRun bool) {
+	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
 	defer cancel()
 	report, errRun := p.runSync(ctx, syncOptions{DryRun: dryRun})
 	if errRun != nil && report != nil {
 		report.Error = errRun.Error()
+	}
+	if parent.Err() != nil {
+		// Stopped by shutdown or a reconfigure; the successor reports.
+		return
 	}
 	logReport(report)
 }
