@@ -104,7 +104,7 @@ func TestUpstreamErrorRedactsCredentials(t *testing.T) {
 			`","token":"` + hexToken + `"}`))
 	}))
 	defer server.Close()
-	_, err := fetchUpstream(context.Background(), Config{TimeoutSeconds: 5}, server.URL, key, "/v1/models")
+	_, err := fetchUpstream(context.Background(), Config{TimeoutSeconds: 5}, server.URL, []string{key}, nil, "", "/v1/models")
 	if err == nil {
 		t.Fatal("expected an error")
 	}
@@ -167,4 +167,66 @@ func TestOwnWriteSkipsStartupSync(t *testing.T) {
 	}
 	stopBackground()
 	t.Fatal("startup sync skipped a change the plugin did not make")
+}
+
+// A 2-space file must stay 2-space. The panel and the deploy scripts write
+// 2 spaces, and rewriting everything at 4 spaces churns the whole file.
+func TestRewriteKeepsIndent(t *testing.T) {
+	for _, spaces := range []int{2, 4} {
+		path := syncFixture(t, upstreamServer(t).URL)
+		original, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rewritten := bytes.ReplaceAll(original, []byte("    "), bytes.Repeat([]byte(" "), spaces))
+		if err := os.WriteFile(path, rewritten, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		p := &pluginState{cfg: Config{ConfigPath: path, Mode: "missing", Fields: allFields, TimeoutSeconds: 5, BackupKeep: 3}}
+		if _, err := p.runSync(context.Background(), syncOptions{}); err != nil {
+			t.Fatalf("%d spaces: %v", spaces, err)
+		}
+		out, _ := os.ReadFile(path)
+		if got := detectIndent(out); got != spaces {
+			t.Fatalf("%d-space file rewritten at %d spaces", spaces, got)
+		}
+	}
+}
+
+// The provider's headers must be sent, a rejected first key must fall through
+// to the next one, and the request must leave through the configured proxy.
+func TestFetchUsesHeadersFallbackKeyAndProxy(t *testing.T) {
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got == "Bearer sk-first" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if r.Header.Get("X-Upstream-Auth") != "tenant-1" {
+			t.Errorf("header not forwarded: %v", r.Header)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer sk-second" {
+			t.Errorf("authorization = %q, want the second key", got)
+		}
+		_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"m","display_name":"M","context_length":1}]}`))
+	}))
+	defer proxy.Close()
+
+	calls := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer upstream.Close()
+
+	models, err := fetchUpstream(context.Background(), Config{TimeoutSeconds: 5},
+		upstream.URL, []string{"sk-first", "sk-second"}, map[string]string{"X-Upstream-Auth": "tenant-1"}, proxy.URL, "/v1/models")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 1 || models[0].DisplayName != "M" {
+		t.Fatalf("got %+v", models)
+	}
+	if calls != 0 {
+		t.Fatalf("request bypassed the proxy: upstream saw %d calls", calls)
+	}
 }

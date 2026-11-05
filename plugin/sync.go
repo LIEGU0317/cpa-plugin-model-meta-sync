@@ -273,12 +273,48 @@ type upstreamStatusError struct {
 func (e *upstreamStatusError) Error() string { return e.Err.Error() }
 func (e *upstreamStatusError) Unwrap() error { return e.Err }
 
-func fetchUpstream(ctx context.Context, cfg Config, baseURL, apiKey, modelsPath string) ([]upstreamModel, error) {
+func fetchUpstream(ctx context.Context, cfg Config, baseURL string, apiKeys []string, headers map[string]string, proxyURL, modelsPath string) ([]upstreamModel, error) {
 	target, err := modelsURL(baseURL, modelsPath)
 	if err != nil {
 		return nil, err
 	}
-	client := &http.Client{Timeout: cfg.timeout()}
+	client, errClient := httpClient(cfg, proxyURL)
+	if errClient != nil {
+		return nil, errClient
+	}
+	if len(apiKeys) == 0 {
+		apiKeys = []string{""}
+	}
+	var lastErr error
+	for _, apiKey := range apiKeys {
+		models, errFetch := fetchUpstreamPages(ctx, client, target, apiKey, headers)
+		if errFetch == nil {
+			return models, nil
+		}
+		lastErr = errFetch
+		var statusErr *upstreamStatusError
+		// A missing endpoint is a property of the URL, not of the key, so the
+		// caller can try its fallback path. Auth failures belong to the key.
+		if errors.As(errFetch, &statusErr) && (statusErr.Code == http.StatusNotFound || statusErr.Code == http.StatusMethodNotAllowed) {
+			return nil, errFetch
+		}
+	}
+	return nil, lastErr
+}
+
+func httpClient(cfg Config, proxyURL string) (*http.Client, error) {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	if strings.TrimSpace(proxyURL) != "" {
+		parsed, err := url.Parse(proxyURL)
+		if err != nil {
+			return nil, fmt.Errorf("proxy-url: %w", err)
+		}
+		transport.Proxy = http.ProxyURL(parsed)
+	}
+	return &http.Client{Timeout: cfg.timeout(), Transport: transport}, nil
+}
+
+func fetchUpstreamPages(ctx context.Context, client *http.Client, target, apiKey string, headers map[string]string) ([]upstreamModel, error) {
 	out := make([]upstreamModel, 0, 64)
 	seen := map[string]bool{}
 	next := target
@@ -289,7 +325,10 @@ func fetchUpstream(ctx context.Context, cfg Config, baseURL, apiKey, modelsPath 
 		}
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("User-Agent", "cpa-model-meta-sync/"+pluginVersion)
-		if apiKey != "" {
+		for name, value := range headers {
+			req.Header.Set(name, value)
+		}
+		if apiKey != "" && req.Header.Get("Authorization") == "" {
 			req.Header.Set("Authorization", "Bearer "+apiKey)
 		}
 		resp, errDo := client.Do(req)
@@ -497,6 +536,9 @@ type configDocument struct {
 	mode os.FileMode
 	doc  *yaml.Node
 	hash string
+	// indent is the file's own nesting step, so a rewrite does not reformat a
+	// 2-space file into 4 spaces.
+	indent int
 }
 
 func loadConfigDocument(path string) (*configDocument, error) {
@@ -514,11 +556,12 @@ func loadConfigDocument(path string) (*configDocument, error) {
 	}
 	sum := sha256.Sum256(raw)
 	return &configDocument{
-		path: path,
-		raw:  raw,
-		mode: info.Mode().Perm(),
-		doc:  doc,
-		hash: hex.EncodeToString(sum[:]),
+		path:   path,
+		raw:    raw,
+		mode:   info.Mode().Perm(),
+		doc:    doc,
+		hash:   hex.EncodeToString(sum[:]),
+		indent: detectIndent(raw),
 	}, nil
 }
 
@@ -548,10 +591,28 @@ func decodeSingleDocument(raw []byte) (*yaml.Node, error) {
 	return documents[0], nil
 }
 
+// detectIndent reads the nesting step from the first indented line. Files
+// with no indentation, or with tabs, keep the 4-space default.
+func detectIndent(raw []byte) int {
+	for _, line := range bytes.Split(raw, []byte("\n")) {
+		n := 0
+		for _, c := range line {
+			if c != ' ' {
+				break
+			}
+			n++
+		}
+		if n > 0 && n < len(line) {
+			return n
+		}
+	}
+	return 4
+}
+
 func (c *configDocument) encode() ([]byte, error) {
 	var buf bytes.Buffer
 	enc := yaml.NewEncoder(&buf)
-	enc.SetIndent(4)
+	enc.SetIndent(c.indent)
 	if err := enc.Encode(c.doc); err != nil {
 		return nil, fmt.Errorf("encode config: %w", err)
 	}
@@ -587,34 +648,72 @@ func (c *configDocument) providers() ([]providerRef, error) {
 	return out, nil
 }
 
-func providerKey(p *yaml.Node) string {
+func providerKeys(p *yaml.Node) []string {
 	if p == nil {
-		return ""
+		return nil
+	}
+	var out []string
+	add := func(key string) {
+		if key != "" {
+			out = append(out, key)
+		}
 	}
 	if keys := mapLookup(p, "keys"); keys != nil && keys.Kind == yaml.SequenceNode {
 		for _, entry := range keys.Content {
 			if entry.Kind == yaml.MappingNode {
-				if key := scalarValue(mapLookup(entry, "api-key")); key != "" {
-					return key
-				}
+				add(scalarValue(mapLookup(entry, "api-key")))
 				continue
 			}
-			if key := scalarValue(entry); key != "" {
-				return key
-			}
+			add(scalarValue(entry))
 		}
+	}
+	if len(out) > 0 {
+		return out
 	}
 	if entries := mapLookup(p, "api-key-entries"); entries != nil && entries.Kind == yaml.SequenceNode {
 		for _, entry := range entries.Content {
+			add(scalarValue(mapLookup(entry, "api-key")))
+		}
+	}
+	return out
+}
+
+func providerKey(p *yaml.Node) string {
+	keys := providerKeys(p)
+	if len(keys) == 0 {
+		return ""
+	}
+	return keys[0]
+}
+
+func providerHeaders(p *yaml.Node) map[string]string {
+	headers := mapLookup(p, "headers")
+	if headers == nil || headers.Kind != yaml.MappingNode {
+		return nil
+	}
+	out := map[string]string{}
+	for i := 0; i+1 < len(headers.Content); i += 2 {
+		name := scalarValue(headers.Content[i])
+		value := scalarValue(headers.Content[i+1])
+		if name != "" && value != "" {
+			out[name] = value
+		}
+	}
+	return out
+}
+
+func providerProxyURL(p *yaml.Node) string {
+	if keys := mapLookup(p, "keys"); keys != nil && keys.Kind == yaml.SequenceNode {
+		for _, entry := range keys.Content {
 			if entry.Kind != yaml.MappingNode {
 				continue
 			}
-			if key := scalarValue(mapLookup(entry, "api-key")); key != "" {
-				return key
+			if proxy := scalarValue(mapLookup(entry, "proxy-url")); proxy != "" {
+				return proxy
 			}
 		}
 	}
-	return scalarValue(mapLookup(p, "api-key"))
+	return ""
 }
 
 // ---------------------------------------------------------------------------
@@ -752,15 +851,17 @@ func (p *pluginState) runSync(ctx context.Context, opts syncOptions) (*RunReport
 			report.Warnings = append(report.Warnings, "yaml anchors/aliases in the model list of "+prov.name+"; that provider was skipped")
 			continue
 		}
-		apiKey := cfg.keyOverride(prov.name)
-		if apiKey == "" {
-			apiKey = providerKey(prov.node)
+		apiKeys := providerKeys(prov.node)
+		if override := cfg.keyOverride(prov.name); override != "" {
+			apiKeys = []string{override}
 		}
+		headers := providerHeaders(prov.node)
+		proxyURL := providerProxyURL(prov.node)
 		baseURL := scalarValue(mapLookup(prov.node, "base-url"))
 		var upstream []upstreamModel
 		var errFetch error
 		for _, modelsPath := range cfg.modelsPathCandidates(prov.name) {
-			upstream, errFetch = fetchUpstream(ctx, cfg, baseURL, apiKey, modelsPath)
+			upstream, errFetch = fetchUpstream(ctx, cfg, baseURL, apiKeys, headers, proxyURL, modelsPath)
 			if errFetch == nil {
 				prep.Endpoint = modelsPath
 				break
