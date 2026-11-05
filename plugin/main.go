@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,10 +30,10 @@ const (
 // pluginVersion is the metadata version CPA reports and the store compares
 // against the release tag. Release builds stamp it from the tag:
 //
-//	-ldflags "-X main.pluginVersion=0.3.2"
+//	-ldflags "-X main.pluginVersion=0.4.0"
 //
 // The default keeps a plain `go build` working during development.
-var pluginVersion = "0.3.2"
+var pluginVersion = "0.4.0"
 
 type pluginState struct {
 	mu         sync.Mutex
@@ -306,7 +309,11 @@ func (p *pluginState) startBackground() {
 				return
 			case <-time.After(startupSyncDelay):
 			}
-			p.backgroundSync(ctx, p.cfg.DryRunOnStart)
+			if path, err := resolveConfigPath(p.cfg.ConfigPath); err == nil && causedByOwnWrite(path) {
+				fmt.Println("[model-meta-sync] startup sync skipped: config reload was caused by the plugin's own write")
+			} else {
+				p.backgroundSync(ctx, p.cfg.DryRunOnStart)
+			}
 		}
 		if interval <= 0 {
 			return
@@ -322,6 +329,38 @@ func (p *pluginState) startBackground() {
 			}
 		}
 	}()
+}
+
+// ownWriteHash is the sha256 of the config file after the plugin's own last
+// write. A reload that re-reads exactly those bytes was caused by the plugin
+// itself, so the startup sync it triggers would only repeat the same fetch.
+var ownWriteHash = struct {
+	sync.Mutex
+	hash string
+}{}
+
+func noteOwnWrite(hash string) {
+	ownWriteHash.Lock()
+	ownWriteHash.hash = hash
+	ownWriteHash.Unlock()
+}
+
+// causedByOwnWrite reports whether the config on disk is byte-identical to the
+// plugin's own last write. An error reading the file is reported as false: a
+// sync that then fails is more useful than one silently skipped.
+func causedByOwnWrite(path string) bool {
+	ownWriteHash.Lock()
+	hash := ownWriteHash.hash
+	ownWriteHash.Unlock()
+	if hash == "" || path == "" {
+		return false
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]) == hash
 }
 
 func (p *pluginState) backgroundSync(parent context.Context, dryRun bool) {
