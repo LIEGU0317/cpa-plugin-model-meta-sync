@@ -133,8 +133,8 @@ if metadata.get("version") != want:
 if not str(plugin.get("logo", "")).startswith("https://"):
     sys.exit(f"plugin has no logo: {plugin.get('logo')!r}")
 fields = plugin.get("config_fields") or []
-if len(fields) != 14:
-    sys.exit(f"expected 14 config fields, got {len(fields)}")
+if len(fields) != 15:
+    sys.exit(f"expected 15 config fields, got {len(fields)}")
 print(f"registration ok: version={metadata['version']} logo={plugin['logo']} config_fields={len(fields)}")
 PY
 

@@ -160,8 +160,13 @@ plugins:
             sync_on_start: true                         # default true: enrich in the same reload
             dry_run_on_start: false                     # true = startup run only reports
             interval_minutes: 0                         # >0 repeats the sync on a timer
-            # api_key: sk-...                           # optional; defaults to the provider's first key
+            # api_keys:                                # optional per-provider key override;
+            #     Gateway A: sk-...                    #   omitted = the provider's first key
 ```
+
+A key override is never sent to any provider other than the one it is keyed by. The older single
+`api_key` is only accepted together with `providers: [<one name>]`; a config with an unscoped
+`api_key` is rejected instead of sending that key to every gateway.
 
 `config_path` is optional. The plugin resolves the CPA config from the host process: its `-config`
 flag when present, otherwise `config.yaml` in the process working directory - the same fallback CPA

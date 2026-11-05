@@ -48,8 +48,13 @@ type Config struct {
 	DryRunOnStart bool `yaml:"dry_run_on_start"`
 	// IntervalMinutes, when positive, repeats the sync on a timer.
 	IntervalMinutes int `yaml:"interval_minutes"`
-	// APIKey optionally overrides the provider key used to read the upstream model list.
+	// APIKey is the deprecated single key override. It is only accepted when
+	// Providers names exactly one provider and is folded into APIKeys for it:
+	// a key sent to every provider leaks to third-party gateways.
 	APIKey string `yaml:"api_key"`
+	// APIKeys maps a provider name to the key used to read its model list,
+	// overriding the provider's first configured key.
+	APIKeys map[string]string `yaml:"api_keys"`
 	// UpstreamModelsPath overrides the model-list path appended to the provider base URL.
 	UpstreamModelsPath string `yaml:"upstream_models_path"`
 	// ModelsPaths maps a provider name to its model-list path. Non-standard
@@ -117,7 +122,35 @@ func parseConfig(raw []byte) (Config, error) {
 	for i := range cfg.Providers {
 		cfg.Providers[i] = strings.TrimSpace(cfg.Providers[i])
 	}
+	keys := make(map[string]string, len(cfg.APIKeys)+1)
+	for name, key := range cfg.APIKeys {
+		name, key = strings.TrimSpace(name), strings.TrimSpace(key)
+		if name == "" || key == "" {
+			return Config{}, fmt.Errorf("api_keys: entries need a provider name and a key")
+		}
+		keys[name] = key
+	}
+	if cfg.APIKey != "" {
+		if len(cfg.Providers) != 1 || cfg.Providers[0] == "" {
+			return Config{}, fmt.Errorf("api_key must be scoped to one provider (providers: [<name>]); use api_keys: {<provider>: <key>} instead")
+		}
+		if _, exists := keys[cfg.Providers[0]]; !exists {
+			keys[cfg.Providers[0]] = cfg.APIKey
+		}
+	}
+	cfg.APIKeys = keys
 	return cfg, nil
+}
+
+// keyOverride returns the configured key override for a provider, matched by
+// name the same way as the provider filter.
+func (c Config) keyOverride(provider string) string {
+	for name, key := range c.APIKeys {
+		if strings.EqualFold(strings.TrimSpace(name), strings.TrimSpace(provider)) {
+			return key
+		}
+	}
+	return ""
 }
 
 // normalizeFields canonicalises a field list. An empty list means every field;
