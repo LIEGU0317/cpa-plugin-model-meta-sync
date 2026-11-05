@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -78,11 +79,18 @@ func parseConfig(raw []byte) (Config, error) {
 	default:
 		return Config{}, fmt.Errorf("invalid mode %q: want missing or always", cfg.Mode)
 	}
-	cfg.Fields = normalizeFields(cfg.Fields)
+	fields, errFields := normalizeFields(cfg.Fields)
+	if errFields != nil {
+		return Config{}, fmt.Errorf("fields: %w", errFields)
+	}
+	cfg.Fields = fields
 	// An absent overwrite list means "never overwrite"; it must not inherit the
 	// empty-list-means-all-fields rule that normalizeFields applies to fields.
 	if len(cfg.OverwriteFields) > 0 {
-		normalized := normalizeFields(cfg.OverwriteFields)
+		normalized, errOverwrite := normalizeFields(cfg.OverwriteFields)
+		if errOverwrite != nil {
+			return Config{}, fmt.Errorf("overwrite_fields: %w", errOverwrite)
+		}
 		filtered := make([]string, 0, len(normalized))
 		for _, field := range normalized {
 			if cfg.hasField(field) {
@@ -112,27 +120,31 @@ func parseConfig(raw []byte) (Config, error) {
 	return cfg, nil
 }
 
-func normalizeFields(fields []string) []string {
+// normalizeFields canonicalises a field list. An empty list means every field;
+// an unknown name is an error rather than a silent widening, because the same
+// helper parses overwrite_fields, where widening means overwriting everything.
+func normalizeFields(fields []string) ([]string, error) {
 	if len(fields) == 0 {
-		out := make([]string, len(allFields))
-		copy(out, allFields)
-		return out
+		return append([]string(nil), allFields...), nil
 	}
 	seen := map[string]bool{}
 	out := make([]string, 0, len(fields))
+	unknown := make([]string, 0)
 	for _, item := range fields {
 		name := strings.ToLower(strings.TrimSpace(item))
-		for _, allowed := range allFields {
-			if name == allowed && !seen[allowed] {
-				seen[allowed] = true
-				out = append(out, allowed)
-			}
+		if !containsString(allFields, name) {
+			unknown = append(unknown, strconv.Quote(item))
+			continue
+		}
+		if !seen[name] {
+			seen[name] = true
+			out = append(out, name)
 		}
 	}
-	if len(out) == 0 {
-		out = append(out, allFields...)
+	if len(unknown) > 0 {
+		return nil, fmt.Errorf("unknown field name(s) %s; valid: %s", strings.Join(unknown, ", "), strings.Join(allFields, ", "))
 	}
-	return out
+	return out, nil
 }
 
 // withDefaults fills in values that parseConfig would have supplied so a
@@ -143,7 +155,7 @@ func (c Config) withDefaults() Config {
 		c.Mode = "missing"
 	}
 	if len(c.Fields) == 0 {
-		c.Fields = normalizeFields(nil)
+		c.Fields = append([]string(nil), allFields...)
 	}
 	if c.TimeoutSeconds <= 0 {
 		c.TimeoutSeconds = defaultTimeoutSec

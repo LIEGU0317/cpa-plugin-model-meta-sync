@@ -59,7 +59,7 @@ func newTestPlugin(t *testing.T, mode string, upstreamURL string) (*pluginState,
 		t.Fatalf("write fixture: %v", err)
 	}
 	cfg := Config{ConfigPath: path, Providers: []string{"Magpie"}, Mode: mode, TimeoutSeconds: 5, BackupKeep: 3}
-	cfg.Fields = normalizeFields(nil)
+	cfg.Fields = append([]string(nil), allFields...)
 	p := &pluginState{cfg: cfg, stop: make(chan struct{})}
 	_ = upstreamURL
 	return p, path

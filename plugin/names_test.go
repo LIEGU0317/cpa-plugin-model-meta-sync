@@ -168,6 +168,25 @@ func TestParseConfigExplicitOverwriteFields(t *testing.T) {
 	}
 }
 
+// A misspelt field name must fail loudly. Falling back to every field turned
+// overwrite_fields: [thinking.levels] into "overwrite everything".
+func TestParseConfigRejectsUnknownFieldNames(t *testing.T) {
+	for _, raw := range []string{
+		"overwrite_fields: [thinking.levels]\n",
+		"overwrite_fields: [display-name, context]\n",
+		"fields: [context]\n",
+	} {
+		if cfg, err := parseConfig([]byte(raw)); err == nil {
+			t.Fatalf("%q: want an error, got fields=%v overwrite=%v", raw, cfg.Fields, cfg.OverwriteFields)
+		}
+	}
+	// Case and surrounding space are still tolerated.
+	cfg, err := parseConfig([]byte("fields: [' Display-Name ', thinking]\n"))
+	if err != nil || len(cfg.Fields) != 2 {
+		t.Fatalf("valid names rejected: %v %v", cfg.Fields, err)
+	}
+}
+
 // sync_on_start is documented as on by default (applying models in the CPAMC
 // editor enriches them in the same reload), so an omitted key must not disable
 // it while an explicit false still must.
