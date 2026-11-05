@@ -733,7 +733,7 @@ func (p *pluginState) runSync(ctx context.Context, opts syncOptions) (*RunReport
 			report.Warnings = append(report.Warnings, "yaml anchors/aliases in the model list of "+prov.name+"; that provider was skipped")
 			continue
 		}
-		apiKey := cfg.APIKey
+		apiKey := cfg.keyOverride(prov.name)
 		if apiKey == "" {
 			apiKey = providerKey(prov.node)
 		}

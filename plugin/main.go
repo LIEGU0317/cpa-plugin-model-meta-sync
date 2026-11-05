@@ -121,8 +121,10 @@ func (p *pluginState) metadata() pluginapi.Metadata {
 				Description: "Repeat the sync every N minutes (0 disables)."},
 			{Name: "models_paths", Type: pluginapi.ConfigFieldTypeObject, Default: map[string]string{},
 				Description: "Per-provider model-list path override, e.g. {Spark: /models}; omitted = automatic /v1/models then /models."},
+			{Name: "api_keys", Type: pluginapi.ConfigFieldTypeObject, Default: map[string]string{},
+				Description: "Per-provider upstream key override, e.g. {Spark: sk-...}; omitted = the provider's first configured key."},
 			{Name: "api_key", Type: pluginapi.ConfigFieldTypeString,
-				Description: "Optional upstream key override; defaults to the provider's first configured key."},
+				Description: "Deprecated: single key override, only accepted with exactly one entry in providers; prefer api_keys."},
 			{Name: "upstream_models_path", Type: pluginapi.ConfigFieldTypeString, Default: defaultUpstreamDir,
 				Description: "Deprecated: global model-list path; prefer models_paths. Defaults to /v1/models."},
 		},
@@ -212,8 +214,8 @@ func (p *pluginState) configPayload() map[string]any {
 	return map[string]any{"ok": true, "config": redactedConfig(p.cfg), "raw_config_yaml": redactConfigYAML(p.configYAML)}
 }
 
-// redactConfigYAML masks api_key in the raw plugin config subtree before it is
-// returned by the management API.
+// redactConfigYAML masks api_key and every api_keys value in the raw plugin
+// config subtree before it is returned by the management API.
 func redactConfigYAML(raw []byte) string {
 	parsed := map[string]any{}
 	if errUnmarshal := yaml.Unmarshal(raw, &parsed); errUnmarshal != nil {
@@ -221,6 +223,13 @@ func redactConfigYAML(raw []byte) string {
 	}
 	if value, ok := parsed["api_key"]; ok && value != nil && value != "" {
 		parsed["api_key"] = "***"
+	}
+	if keys, ok := parsed["api_keys"].(map[string]any); ok {
+		for name := range keys {
+			keys[name] = "***"
+		}
+	} else if parsed["api_keys"] != nil {
+		parsed["api_keys"] = "***"
 	}
 	out, errMarshal := yaml.Marshal(parsed)
 	if errMarshal != nil {
@@ -233,6 +242,12 @@ func redactedConfig(cfg Config) Config {
 	out := cfg
 	if out.APIKey != "" {
 		out.APIKey = "***"
+	}
+	if len(cfg.APIKeys) > 0 {
+		out.APIKeys = make(map[string]string, len(cfg.APIKeys))
+		for name := range cfg.APIKeys {
+			out.APIKeys[name] = "***"
+		}
 	}
 	return out
 }
