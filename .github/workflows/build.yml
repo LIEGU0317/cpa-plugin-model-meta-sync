@@ -47,6 +47,10 @@ jobs:
         working-directory: plugin
         run: go test ./...
 
+      - name: Race detector
+        working-directory: plugin
+        run: go test -race -count=1 ./...
+
       - name: Vet
         working-directory: plugin
         run: go vet ./...
