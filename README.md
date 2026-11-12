@@ -24,7 +24,7 @@ longer have to be typed by hand.</p>
   style does not have to be declared anywhere.
 - Packaging: plugin-store layout - `<id>_<version>_<goos>_<goarch>.zip` with the library at the zip
   root plus `checksums.txt` (see [Releases](#releases)).
-- Current release: **0.4.0**.
+- Current release: **0.4.1**.
 
 ## Why a plugin
 
@@ -32,6 +32,12 @@ CPA never queries an openai-compatibility provider's `/v1/models`; the provider 
 exists in `config.yaml`. This plugin fills that gap: it fetches each gateway's catalog, maps the
 fields CPA understands, merges them into the provider entries, validates the change and lets CPA's
 file watcher hot-reload the config. Models are never added or removed.
+
+One entry shape is repaired rather than skipped: a model that carries nothing but `name` - no alias,
+no metadata - is invisible to CPA, because CPA addresses models by alias. A request for that name
+then resolves only on the other providers that declare it and fails there with an unrelated
+gateway error. The sync gives such an entry its name as the alias plus at least a display name, and
+names it in the run report under `bare_entries`.
 
 ## What gets synced
 

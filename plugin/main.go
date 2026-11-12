@@ -33,7 +33,7 @@ const (
 //	-ldflags "-X main.pluginVersion=0.4.0"
 //
 // The default keeps a plain `go build` working during development.
-var pluginVersion = "0.4.0"
+var pluginVersion = "0.4.1"
 
 type pluginState struct {
 	mu         sync.Mutex

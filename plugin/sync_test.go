@@ -603,3 +603,111 @@ api-keys:
 		}
 	}
 }
+
+// bareNameConfigYAML declares one model with nothing but its name, which is
+// the shape that stays invisible to CPA: no alias, no metadata.
+func bareNameConfigYAML(upstreamURL string) string {
+	return fmt.Sprintf(`config-version: 8
+api-keys:
+    openai-compatibility:
+        - name: workbuddy
+          base-url: %s
+          keys:
+            - api-key: sk-test
+          models:
+            - name: auto/model-c
+            - name: model-d
+            - name: auto/model-b
+              alias: model-b
+`, upstreamURL)
+}
+
+func TestSyncFillsBareNameEntries(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(testUpstreamBody))
+	}))
+	defer server.Close()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte(bareNameConfigYAML(server.URL)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p := &pluginState{cfg: Config{ConfigPath: path, Providers: []string{"workbuddy"}, Mode: "missing", Fields: allFields, TimeoutSeconds: 5, BackupKeep: 3}, stop: make(chan struct{})}
+
+	report, err := p.runSync(context.Background(), syncOptions{})
+	if err != nil {
+		t.Fatalf("sync: %v (report error %q)", err, report.Error)
+	}
+	if !report.Written {
+		t.Fatalf("expected a write, got %+v", report)
+	}
+	if len(report.Providers) != 1 {
+		t.Fatalf("expected one provider report, got %+v", report.Providers)
+	}
+	if got := report.Providers[0].BareEntries; len(got) != 2 || got[0] != "auto/model-c" || got[1] != "model-d" {
+		t.Fatalf("bare entries not reported: %v", got)
+	}
+	if len(report.Warnings) == 0 || !strings.Contains(report.Warnings[0], "model-d") {
+		t.Fatalf("expected a warning naming the bare entries, got %v", report.Warnings)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("written yaml invalid: %v", err)
+	}
+	models := cfg["api-keys"].(map[string]any)["openai-compatibility"].([]any)[0].(map[string]any)["models"].([]any)
+
+	matched := models[0].(map[string]any)
+	if matched["alias"] != "auto/model-c" {
+		t.Fatalf("alias not derived from the model name: %v", matched)
+	}
+	if matched["display-name"] != "Model C" {
+		t.Fatalf("matched bare entry lost its upstream display name: %v", matched)
+	}
+
+	unmatched := models[1].(map[string]any)
+	if unmatched["alias"] != "model-d" || unmatched["display-name"] != "model-d" {
+		t.Fatalf("unmatched bare entry left unusable: %v", unmatched)
+	}
+
+	aliasOnly := models[2].(map[string]any)
+	if aliasOnly["alias"] != "model-b" || aliasOnly["display-name"] != "Model B" {
+		t.Fatalf("entry with an alias must be filled normally: %v", aliasOnly)
+	}
+	if _, ok := aliasOnly["max-context-length"]; !ok {
+		t.Fatalf("entry with an alias lost its metadata: %v", aliasOnly)
+	}
+
+	report2, err := p.runSync(context.Background(), syncOptions{})
+	if err != nil {
+		t.Fatalf("second sync: %v", err)
+	}
+	if report2.Written || report2.ChangedFields != 0 {
+		t.Fatalf("expected idempotent second run, got %+v", report2)
+	}
+}
+
+func TestValidateAcceptsAliasOnlyWhenItIsTheModelName(t *testing.T) {
+	oldRaw := []byte(bareNameConfigYAML("http://127.0.0.1:19001"))
+	sameName := strings.Replace(string(oldRaw), "            - name: model-d\n", "            - name: model-d\n              alias: model-d\n", 1)
+	if err := validateSemanticDiff(oldRaw, []byte(sameName), Config{Fields: allFields}, map[int]bool{0: true}); err != nil {
+		t.Fatalf("alias equal to the model name must be allowed: %v", err)
+	}
+	renamed := strings.Replace(string(oldRaw), "            - name: model-d\n", "            - name: model-d\n              alias: something-else\n", 1)
+	errRename := validateSemanticDiff(oldRaw, []byte(renamed), Config{Fields: allFields}, map[int]bool{0: true})
+	if errRename == nil {
+		t.Fatal("an alias rename must be rejected")
+	}
+	if !strings.Contains(errRename.Error(), "alias") {
+		t.Fatalf("expected the alias path in the error, got %v", errRename)
+	}
+}

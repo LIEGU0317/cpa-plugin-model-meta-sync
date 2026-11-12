@@ -739,6 +739,7 @@ type ProviderReport struct {
 	Configured  int           `json:"configured_models"`
 	Matched     int           `json:"matched"`
 	Unmatched   []string      `json:"unmatched,omitempty"`
+	BareEntries []string      `json:"bare_entries,omitempty"`
 	Changed     int           `json:"changed_models"`
 	FieldCount  int           `json:"changed_fields"`
 	Changes     []ModelChange `json:"changes,omitempty"`
@@ -875,6 +876,13 @@ func (p *pluginState) runSync(ctx context.Context, opts syncOptions) (*RunReport
 		if errFetch != nil {
 			prep.UpstreamErr = errFetch.Error()
 			upstreamFailures = append(upstreamFailures, prov.name)
+			// Nothing can be filled without the catalog, but a metadata-less
+			// entry stays invisible to CPA, so at least name it in the report.
+			for _, modelNode := range prov.models.Content {
+				if isBareModelEntry(modelNode) {
+					prep.BareEntries = append(prep.BareEntries, modelIdent(modelNode))
+				}
+			}
 			report.Providers = append(report.Providers, prep)
 			continue
 		}
@@ -893,13 +901,25 @@ func (p *pluginState) runSync(ctx context.Context, opts syncOptions) (*RunReport
 			if ident == "" {
 				ident = alias
 			}
-			match, okMatch := index.lookup(name, alias)
-			if !okMatch {
+			bare := isBareModelEntry(modelNode)
+			var match *upstreamModel
+			if found, okMatch := index.lookup(name, alias); okMatch {
+				prep.Matched++
+				match = &found
+			} else if !bare {
 				prep.Unmatched = append(prep.Unmatched, ident)
 				continue
 			}
-			prep.Matched++
-			changes := applyUpstreamFields(modelNode, match, cfg)
+			if bare {
+				prep.BareEntries = append(prep.BareEntries, ident)
+			}
+			var changes []FieldChange
+			if match != nil {
+				changes = applyUpstreamFields(modelNode, *match, cfg)
+			}
+			if bare {
+				changes = append(changes, ensureMinimumMetadata(modelNode, match, cfg)...)
+			}
 			if len(changes) == 0 {
 				continue
 			}
@@ -909,6 +929,14 @@ func (p *pluginState) runSync(ctx context.Context, opts syncOptions) (*RunReport
 			changedTotal += len(changes)
 		}
 		report.Providers = append(report.Providers, prep)
+	}
+
+	for _, prep := range report.Providers {
+		if len(prep.BareEntries) == 0 {
+			continue
+		}
+		report.Warnings = append(report.Warnings, "provider "+prep.Name+": model entries with only a name ("+
+			strings.Join(prep.BareEntries, ", ")+"); CPA does not surface those, give each one an alias and a display-name")
 	}
 
 	if selectedProviders == 0 {
@@ -1053,6 +1081,69 @@ func applyUpstreamFields(model *yaml.Node, up upstreamModel, cfg Config) []Field
 	return changes
 }
 
+// isBareModelEntry reports whether a configured model entry carries nothing
+// but its upstream model name: no alias and no metadata at all.
+//
+// CPA does not surface such an entry: it is addressed by alias, so with none
+// the model never reaches the catalog. Requests for that name are then routed
+// to whichever other provider declares the same alias and fail there with an
+// unrelated upstream error — the failure mode that looks like a gateway bug
+// weeks after the entry was written. The sync therefore never leaves one
+// behind.
+func isBareModelEntry(model *yaml.Node) bool {
+	if model == nil || model.Kind != yaml.MappingNode {
+		return false
+	}
+	if scalarValue(mapLookup(model, "alias")) != "" {
+		return false
+	}
+	for i := 0; i+1 < len(model.Content); i += 2 {
+		if model.Content[i].Value != "name" {
+			return false
+		}
+	}
+	return scalarValue(mapLookup(model, "name")) != ""
+}
+
+// modelIdent names a model entry the way reports and warnings refer to it.
+func modelIdent(model *yaml.Node) string {
+	if name := scalarValue(mapLookup(model, "name")); name != "" {
+		return name
+	}
+	return scalarValue(mapLookup(model, "alias"))
+}
+
+// ensureMinimumMetadata gives a bare entry the smallest set CPA needs to list
+// it: an alias (CPA addresses models by alias) and a display name. `upstream`
+// is nil when the entry is not in the gateway catalog; the entry's own name is
+// then the display name, which is still far better than staying invisible.
+func ensureMinimumMetadata(model *yaml.Node, upstream *upstreamModel, cfg Config) []FieldChange {
+	changes := make([]FieldChange, 0, 2)
+	name := scalarValue(mapLookup(model, "name"))
+	if alias := scalarValue(mapLookup(model, "alias")); alias == "" && name != "" {
+		changes = append(changes, FieldChange{Field: "alias", Before: "", After: name})
+		setMapValue(model, "alias", newScalar(name, "!!str"))
+	}
+	if !cfg.hasField("display-name") {
+		return changes
+	}
+	if current := scalarValue(mapLookup(model, "display-name")); current != "" {
+		return changes
+	}
+	value := name
+	if upstream != nil {
+		if upstreamName, ok := upstream.valueFor("display-name").(string); ok && upstreamName != "" {
+			value = upstreamName
+		}
+	}
+	if value == "" {
+		return changes
+	}
+	changes = append(changes, FieldChange{Field: "display-name", Before: "", After: value})
+	setMapValue(model, "display-name", newScalar(value, "!!str"))
+	return changes
+}
+
 func sameStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
@@ -1085,19 +1176,58 @@ func validateSemanticDiff(oldRaw, newRaw []byte, cfg Config, allowedProviders ma
 		"input-modalities":   cfg.hasField("input-modalities"),
 		"output-modalities":  cfg.hasField("output-modalities"),
 		"thinking":           cfg.hasField("thinking"),
+		// An alias may only ever be added as the entry's own model name; see
+		// aliasEqualsName below.
+		"alias": true,
 	}
 	unexpected := make([]string, 0)
 	for _, path := range paths {
-		if pathAllowed(path, allowed, allowedProviders) {
+		if !pathAllowed(path, allowed, allowedProviders) {
+			unexpected = append(unexpected, path)
 			continue
 		}
-		unexpected = append(unexpected, path)
+		if strings.HasSuffix(path, ".alias") && !aliasEqualsName(newMap, path) {
+			unexpected = append(unexpected, path)
+		}
 	}
 	if len(unexpected) > 0 {
 		sort.Strings(unexpected)
 		return fmt.Errorf("refusing to write: unexpected config changes: %s", strings.Join(unexpected, ", "))
 	}
 	return nil
+}
+
+// aliasEqualsName reports whether the change at path only gave a model entry
+// its own name as the alias, which is what makes a bare entry visible to CPA.
+// Anything else at an alias path is a real rename and must be rejected.
+func aliasEqualsName(root map[string]any, path string) bool {
+	parts := strings.Split(path, ".")
+	var cur any = root
+	for _, part := range parts[:len(parts)-1] {
+		switch typed := cur.(type) {
+		case map[string]any:
+			next, ok := typed[part]
+			if !ok {
+				return false
+			}
+			cur = next
+		case []any:
+			idx, errIndex := strconv.Atoi(part)
+			if errIndex != nil || idx < 0 || idx >= len(typed) {
+				return false
+			}
+			cur = typed[idx]
+		default:
+			return false
+		}
+	}
+	model, ok := cur.(map[string]any)
+	if !ok {
+		return false
+	}
+	alias, _ := model["alias"].(string)
+	name, _ := model["name"].(string)
+	return name != "" && alias == name
 }
 
 func pathAllowed(path string, allowed map[string]bool, allowedProviders map[int]bool) bool {

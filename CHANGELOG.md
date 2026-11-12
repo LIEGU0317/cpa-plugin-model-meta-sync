@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.1
+
+- **A model entry with nothing but `name` no longer stays invisible.** CPA addresses models by
+  `alias`; an entry without one never reaches the model catalog, so requests for that name are
+  routed to whichever other provider declares the same alias and fail there with an unrelated
+  upstream error (`magpie knows no model ...` was the visible symptom of exactly this). The sync now
+  writes `alias: <name>` and a display name onto such an entry and lists it in the report under
+  `bare_entries`, with one warning per affected provider. Entries that already carry an alias are
+  untouched by this rule.
+- **The write guard allows an alias only when it is the entry's own model name.** Any other alias
+  change is still refused as an unexpected config change: `aliasEqualsName` checks the value, not
+  just the path.
+
 ## 0.3.2
 
 Review fixes. Each change has a regression test that fails on 0.3.1.
