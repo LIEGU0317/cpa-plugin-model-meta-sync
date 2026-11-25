@@ -230,3 +230,41 @@ func TestFetchUsesHeadersFallbackKeyAndProxy(t *testing.T) {
 		t.Fatalf("request bypassed the proxy: upstream saw %d calls", calls)
 	}
 }
+
+// CPA spells "do not use any proxy" as the literal `proxy-url: direct` (or
+// `none`). Treating that string as a proxy address yields a transport with an
+// empty host, which fails as `dial tcp :0: connection refused` and makes the
+// provider look unreachable.
+func TestDirectProxyKeywordBypassesEveryProxy(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"m","name":"M"}]}`))
+	}))
+	defer upstream.Close()
+
+	// A bogus environment proxy proves the keyword also clears the env path.
+	t.Setenv("HTTP_PROXY", "http://127.0.0.1:1")
+	t.Setenv("http_proxy", "http://127.0.0.1:1")
+
+	for _, keyword := range []string{"direct", "none", "DIRECT", " none "} {
+		models, err := fetchUpstream(context.Background(), Config{TimeoutSeconds: 5},
+			upstream.URL, []string{"sk"}, nil, keyword, "/v1/models")
+		if err != nil {
+			t.Fatalf("%q: %v", keyword, err)
+		}
+		if len(models) != 1 || models[0].ID != "m" {
+			t.Fatalf("%q: got %+v", keyword, models)
+		}
+	}
+}
+
+// A proxy value that is neither a keyword nor a usable URL must fail at parse
+// time with a readable error instead of dialling port 0 later.
+func TestUnusableProxyURLFailsLoudly(t *testing.T) {
+	for _, bad := range []string{"direct2", "http://", "socks5://"} {
+		if _, err := httpClient(Config{TimeoutSeconds: 5}, bad); err == nil {
+			t.Fatalf("%q: expected an error", bad)
+		} else if !strings.Contains(err.Error(), "proxy-url") {
+			t.Fatalf("%q: unexpected error %v", bad, err)
+		}
+	}
+}

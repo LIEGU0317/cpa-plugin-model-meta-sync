@@ -304,10 +304,24 @@ func fetchUpstream(ctx context.Context, cfg Config, baseURL string, apiKeys []st
 
 func httpClient(cfg Config, proxyURL string) (*http.Client, error) {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	if strings.TrimSpace(proxyURL) != "" {
+	// CPA gives `proxy-url` on a provider or credential three meanings: a real
+	// proxy URL, the literal "direct"/"none" (bypass both the global proxy and
+	// the environment proxies), and empty (inherit the parent setting). Parsing
+	// "direct" as a URL yields a proxy with no host, which fails at dial time
+	// with `dial tcp :0: connect: connection refused` - the provider then looks
+	// unreachable even though its catalog is one hop away.
+	switch strings.ToLower(strings.TrimSpace(proxyURL)) {
+	case "direct", "none":
+		transport.Proxy = nil
+	case "":
+		// Keep DefaultTransport's environment-proxy behaviour.
+	default:
 		parsed, err := url.Parse(proxyURL)
 		if err != nil {
 			return nil, fmt.Errorf("proxy-url: %w", err)
+		}
+		if parsed.Host == "" {
+			return nil, fmt.Errorf("proxy-url %q: no host:port", proxyURL)
 		}
 		transport.Proxy = http.ProxyURL(parsed)
 	}
@@ -702,6 +716,9 @@ func providerHeaders(p *yaml.Node) map[string]string {
 	return out
 }
 
+// providerProxyURL returns the proxy CPA would use for this provider's
+// credentials: a per-key override wins, otherwise the group-level value
+// applies. "direct"/"none" are keywords, not addresses - see httpClient.
 func providerProxyURL(p *yaml.Node) string {
 	if keys := mapLookup(p, "keys"); keys != nil && keys.Kind == yaml.SequenceNode {
 		for _, entry := range keys.Content {
@@ -713,7 +730,7 @@ func providerProxyURL(p *yaml.Node) string {
 			}
 		}
 	}
-	return ""
+	return scalarValue(mapLookup(p, "proxy-url"))
 }
 
 // ---------------------------------------------------------------------------
