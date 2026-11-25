@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.2
+
+- **`proxy-url: direct` / `none` no longer breaks the catalog fetch.** CPA spells "no proxy for this
+  provider" as the literal `direct` (or `none`), and the sync parsed that string as a proxy address.
+  The transport then had a proxy with no host and every fetch failed with `proxyconnect tcp: dial tcp
+  :0: connect: connection refused`, so the provider reported `matched=0/0` and kept whatever metadata
+  the config already had — a missing `display-name`, an out-of-date `max-context-length`. The keyword
+  now disables the proxy for that fetch, including the environment proxies, as CPA does.
+- **The group-level `proxy-url` is read.** A credential's own value still wins, but a provider that
+  only sets `proxy-url` on the group no longer falls back to the environment proxy.
+- **An unusable proxy value fails loudly.** A value that is neither a keyword nor an absolute URL with
+  a host now returns `proxy-url "…": no host:port` at parse time instead of dialling port 0 at request
+  time.
+
 ## 0.4.1
 
 - **A model entry with nothing but `name` no longer stays invisible.** CPA addresses models by
